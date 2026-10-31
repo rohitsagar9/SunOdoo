@@ -1,0 +1,358 @@
+{
+  "generatedAt": "2026-10-31T05:35:09.931Z",
+  "symbology": "Code 128",
+  "count": 34,
+  "folders": {
+    "PANEL": "panels",
+    "INVERTER": "inverters",
+    "BATTERY": "batteries",
+    "CHARGE_CONTROLLER": "charge-controllers",
+    "STRUCTURE": "structures",
+    "CABLE": "cables",
+    "BOS": "bos",
+    "SERVICE": "services",
+    "TOOL": "tools"
+  },
+  "items": [
+    {
+      "sku": "PANEL-540W",
+      "name": "540W Mono PERC Solar Panel",
+      "category": "PANEL",
+      "folder": "panels",
+      "path": "/barcodes/panels/PANEL-540W.svg",
+      "unit": "panel",
+      "unitPrice": 13500,
+      "warrantyMonths": 240
+    },
+    {
+      "sku": "INV-1K",
+      "name": "1 kW On/Off-Grid Inverter",
+      "category": "INVERTER",
+      "folder": "inverters",
+      "path": "/barcodes/inverters/INV-1K.svg",
+      "unit": "unit",
+      "unitPrice": 42000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "INV-2K",
+      "name": "2 kW On/Off-Grid Inverter",
+      "category": "INVERTER",
+      "folder": "inverters",
+      "path": "/barcodes/inverters/INV-2K.svg",
+      "unit": "unit",
+      "unitPrice": 58000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "INV-3K",
+      "name": "3 kW On/Off-Grid Inverter",
+      "category": "INVERTER",
+      "folder": "inverters",
+      "path": "/barcodes/inverters/INV-3K.svg",
+      "unit": "unit",
+      "unitPrice": 72000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "INV-4K",
+      "name": "4 kW On/Off-Grid Inverter",
+      "category": "INVERTER",
+      "folder": "inverters",
+      "path": "/barcodes/inverters/INV-4K.svg",
+      "unit": "unit",
+      "unitPrice": 88000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "INV-5K",
+      "name": "5 kW On/Off-Grid Inverter",
+      "category": "INVERTER",
+      "folder": "inverters",
+      "path": "/barcodes/inverters/INV-5K.svg",
+      "unit": "unit",
+      "unitPrice": 105000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "BAT-2.4K",
+      "name": "2.4 kWh LiFePO4 Battery",
+      "category": "BATTERY",
+      "folder": "batteries",
+      "path": "/barcodes/batteries/BAT-2.4K.svg",
+      "unit": "unit",
+      "unitPrice": 48000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "BAT-5K",
+      "name": "5 kWh LiFePO4 Battery",
+      "category": "BATTERY",
+      "folder": "batteries",
+      "path": "/barcodes/batteries/BAT-5K.svg",
+      "unit": "unit",
+      "unitPrice": 86000,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "CC-60A",
+      "name": "60A MPPT Charge Controller",
+      "category": "CHARGE_CONTROLLER",
+      "folder": "charge-controllers",
+      "path": "/barcodes/charge-controllers/CC-60A.svg",
+      "unit": "unit",
+      "unitPrice": 8500,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "STR-1K",
+      "name": "1 kW Galvanised Mounting Structure",
+      "category": "STRUCTURE",
+      "folder": "structures",
+      "path": "/barcodes/structures/STR-1K.svg",
+      "unit": "set",
+      "unitPrice": 12000,
+      "warrantyMonths": 120
+    },
+    {
+      "sku": "STR-2K",
+      "name": "2 kW Galvanised Mounting Structure",
+      "category": "STRUCTURE",
+      "folder": "structures",
+      "path": "/barcodes/structures/STR-2K.svg",
+      "unit": "set",
+      "unitPrice": 18000,
+      "warrantyMonths": 120
+    },
+    {
+      "sku": "STR-3K",
+      "name": "3 kW Galvanised Mounting Structure",
+      "category": "STRUCTURE",
+      "folder": "structures",
+      "path": "/barcodes/structures/STR-3K.svg",
+      "unit": "set",
+      "unitPrice": 24000,
+      "warrantyMonths": 120
+    },
+    {
+      "sku": "STR-4K",
+      "name": "4 kW Galvanised Mounting Structure",
+      "category": "STRUCTURE",
+      "folder": "structures",
+      "path": "/barcodes/structures/STR-4K.svg",
+      "unit": "set",
+      "unitPrice": 30000,
+      "warrantyMonths": 120
+    },
+    {
+      "sku": "STR-5K",
+      "name": "5 kW Galvanised Mounting Structure",
+      "category": "STRUCTURE",
+      "folder": "structures",
+      "path": "/barcodes/structures/STR-5K.svg",
+      "unit": "set",
+      "unitPrice": 36000,
+      "warrantyMonths": 120
+    },
+    {
+      "sku": "CABLE-DC-4MM",
+      "name": "4 mm² DC Solar Cable (per metre)",
+      "category": "CABLE",
+      "folder": "cables",
+      "path": "/barcodes/cables/CABLE-DC-4MM.svg",
+      "unit": "metre",
+      "unitPrice": 65,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "CABLE-AC-4MM",
+      "name": "4 mm² AC Armoured Cable (per metre)",
+      "category": "CABLE",
+      "folder": "cables",
+      "path": "/barcodes/cables/CABLE-AC-4MM.svg",
+      "unit": "metre",
+      "unitPrice": 85,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "MC4-PAIR",
+      "name": "MC4 Connector Pair",
+      "category": "BOS",
+      "folder": "bos",
+      "path": "/barcodes/bos/MC4-PAIR.svg",
+      "unit": "pair",
+      "unitPrice": 450,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "EARTH-KIT",
+      "name": "Safety Earthing Kit",
+      "category": "BOS",
+      "folder": "bos",
+      "path": "/barcodes/bos/EARTH-KIT.svg",
+      "unit": "kit",
+      "unitPrice": 4500,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "ACDB-3K",
+      "name": "AC Distribution Box",
+      "category": "BOS",
+      "folder": "bos",
+      "path": "/barcodes/bos/ACDB-3K.svg",
+      "unit": "unit",
+      "unitPrice": 6500,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "DCDB-3K",
+      "name": "DC Distribution Box",
+      "category": "BOS",
+      "folder": "bos",
+      "path": "/barcodes/bos/DCDB-3K.svg",
+      "unit": "unit",
+      "unitPrice": 5500,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "LA-KIT",
+      "name": "Lightning Arrester Kit",
+      "category": "BOS",
+      "folder": "bos",
+      "path": "/barcodes/bos/LA-KIT.svg",
+      "unit": "kit",
+      "unitPrice": 3800,
+      "warrantyMonths": 60
+    },
+    {
+      "sku": "INSTALL-KW",
+      "name": "Installation & Commissioning (per kW)",
+      "category": "SERVICE",
+      "folder": "services",
+      "path": "/barcodes/services/INSTALL-KW.svg",
+      "unit": "kW",
+      "unitPrice": 8000,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "SURVEY",
+      "name": "Roof Survey Visit",
+      "category": "SERVICE",
+      "folder": "services",
+      "path": "/barcodes/services/SURVEY.svg",
+      "unit": "visit",
+      "unitPrice": 1500,
+      "warrantyMonths": 0
+    },
+    {
+      "sku": "COMMISSIONING",
+      "name": "Grid Synchronisation & Net Metering",
+      "category": "SERVICE",
+      "folder": "services",
+      "path": "/barcodes/services/COMMISSIONING.svg",
+      "unit": "job",
+      "unitPrice": 3000,
+      "warrantyMonths": 0
+    },
+    {
+      "sku": "TOOL-DRILL",
+      "name": "Bosch Hammer Drill",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-DRILL.svg",
+      "unit": "unit",
+      "unitPrice": 12500,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-MC4-CRIMP",
+      "name": "MC4 Crimping Tool",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-MC4-CRIMP.svg",
+      "unit": "unit",
+      "unitPrice": 2800,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-CLAMP-METER",
+      "name": "Digital Clamp Meter",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-CLAMP-METER.svg",
+      "unit": "unit",
+      "unitPrice": 4200,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-EARTH-TESTER",
+      "name": "Earth Resistance Tester",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-EARTH-TESTER.svg",
+      "unit": "unit",
+      "unitPrice": 9500,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-MULTIMETER",
+      "name": "Fluke Digital Multimeter",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-MULTIMETER.svg",
+      "unit": "unit",
+      "unitPrice": 7800,
+      "warrantyMonths": 24
+    },
+    {
+      "sku": "TOOL-HARNESS",
+      "name": "Full Body Safety Harness",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-HARNESS.svg",
+      "unit": "unit",
+      "unitPrice": 3600,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-GRINDER",
+      "name": "4-inch Angle Grinder",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-GRINDER.svg",
+      "unit": "unit",
+      "unitPrice": 3400,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-LASER",
+      "name": "Laser Distance Meter",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-LASER.svg",
+      "unit": "unit",
+      "unitPrice": 5200,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-TORQUE",
+      "name": "Torque Wrench Set",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-TORQUE.svg",
+      "unit": "unit",
+      "unitPrice": 4600,
+      "warrantyMonths": 12
+    },
+    {
+      "sku": "TOOL-LADDER",
+      "name": "Aluminium Extension Ladder",
+      "category": "TOOL",
+      "folder": "tools",
+      "path": "/barcodes/tools/TOOL-LADDER.svg",
+      "unit": "unit",
+      "unitPrice": 8900,
+      "warrantyMonths": 12
+    }
+  ]
+}

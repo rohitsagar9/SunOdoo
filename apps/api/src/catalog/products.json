@@ -1,0 +1,355 @@
+[
+  {
+    "sku": "PANEL-540W",
+    "name": "540W Mono PERC Solar Panel",
+    "category": "PANEL",
+    "unit": "panel",
+    "unitPrice": 13500,
+    "costPrice": 11800,
+    "warrantyMonths": 240,
+    "capacityKw": 0.54,
+    "description": "Bifacial-ready 540 Wp mono PERC module, 25-year performance warranty."
+  },
+  {
+    "sku": "INV-1K",
+    "name": "1 kW On/Off-Grid Inverter",
+    "category": "INVERTER",
+    "unit": "unit",
+    "unitPrice": 42000,
+    "costPrice": 36000,
+    "warrantyMonths": 24,
+    "capacityKw": 1,
+    "description": "Pure sine wave inverter with MPPT charge controller and Wi-Fi monitoring."
+  },
+  {
+    "sku": "INV-2K",
+    "name": "2 kW On/Off-Grid Inverter",
+    "category": "INVERTER",
+    "unit": "unit",
+    "unitPrice": 58000,
+    "costPrice": 49000,
+    "warrantyMonths": 24,
+    "capacityKw": 2,
+    "description": "Pure sine wave inverter with dual MPPT and mobile monitoring."
+  },
+  {
+    "sku": "INV-3K",
+    "name": "3 kW On/Off-Grid Inverter",
+    "category": "INVERTER",
+    "unit": "unit",
+    "unitPrice": 72000,
+    "costPrice": 61000,
+    "warrantyMonths": 24,
+    "capacityKw": 3,
+    "description": "High-efficiency 3 kW hybrid inverter, IP65, dual MPPT."
+  },
+  {
+    "sku": "INV-4K",
+    "name": "4 kW On/Off-Grid Inverter",
+    "category": "INVERTER",
+    "unit": "unit",
+    "unitPrice": 88000,
+    "costPrice": 75000,
+    "warrantyMonths": 24,
+    "capacityKw": 4,
+    "description": "4 kW hybrid inverter with smart load management."
+  },
+  {
+    "sku": "INV-5K",
+    "name": "5 kW On/Off-Grid Inverter",
+    "category": "INVERTER",
+    "unit": "unit",
+    "unitPrice": 105000,
+    "costPrice": 89000,
+    "warrantyMonths": 24,
+    "capacityKw": 5,
+    "description": "5 kW three-phase ready hybrid inverter with remote diagnostics."
+  },
+  {
+    "sku": "BAT-2.4K",
+    "name": "2.4 kWh LiFePO4 Battery",
+    "category": "BATTERY",
+    "unit": "unit",
+    "unitPrice": 48000,
+    "costPrice": 41000,
+    "warrantyMonths": 24,
+    "capacityKw": 2.4,
+    "description": "Deep-cycle lithium iron phosphate battery with BMS."
+  },
+  {
+    "sku": "BAT-5K",
+    "name": "5 kWh LiFePO4 Battery",
+    "category": "BATTERY",
+    "unit": "unit",
+    "unitPrice": 86000,
+    "costPrice": 74000,
+    "warrantyMonths": 24,
+    "capacityKw": 5,
+    "description": "Rack-mount 5 kWh storage battery with smart BMS."
+  },
+  {
+    "sku": "CC-60A",
+    "name": "60A MPPT Charge Controller",
+    "category": "CHARGE_CONTROLLER",
+    "unit": "unit",
+    "unitPrice": 8500,
+    "costPrice": 7000,
+    "warrantyMonths": 24,
+    "description": "60 A MPPT charge controller with temperature compensation."
+  },
+  {
+    "sku": "STR-1K",
+    "name": "1 kW Galvanised Mounting Structure",
+    "category": "STRUCTURE",
+    "unit": "set",
+    "unitPrice": 12000,
+    "costPrice": 9500,
+    "warrantyMonths": 120,
+    "capacityKw": 1,
+    "description": "Hot-dip galvanised roof structure rated for 150 km/h wind load."
+  },
+  {
+    "sku": "STR-2K",
+    "name": "2 kW Galvanised Mounting Structure",
+    "category": "STRUCTURE",
+    "unit": "set",
+    "unitPrice": 18000,
+    "costPrice": 14500,
+    "warrantyMonths": 120,
+    "capacityKw": 2,
+    "description": "Hot-dip galvanised roof structure rated for 150 km/h wind load."
+  },
+  {
+    "sku": "STR-3K",
+    "name": "3 kW Galvanised Mounting Structure",
+    "category": "STRUCTURE",
+    "unit": "set",
+    "unitPrice": 24000,
+    "costPrice": 19000,
+    "warrantyMonths": 120,
+    "capacityKw": 3,
+    "description": "Hot-dip galvanised roof structure rated for 150 km/h wind load."
+  },
+  {
+    "sku": "STR-4K",
+    "name": "4 kW Galvanised Mounting Structure",
+    "category": "STRUCTURE",
+    "unit": "set",
+    "unitPrice": 30000,
+    "costPrice": 24000,
+    "warrantyMonths": 120,
+    "capacityKw": 4,
+    "description": "Hot-dip galvanised roof structure rated for 150 km/h wind load."
+  },
+  {
+    "sku": "STR-5K",
+    "name": "5 kW Galvanised Mounting Structure",
+    "category": "STRUCTURE",
+    "unit": "set",
+    "unitPrice": 36000,
+    "costPrice": 29000,
+    "warrantyMonths": 120,
+    "capacityKw": 5,
+    "description": "Hot-dip galvanised roof structure rated for 150 km/h wind load."
+  },
+  {
+    "sku": "CABLE-DC-4MM",
+    "name": "4 mm² DC Solar Cable (per metre)",
+    "category": "CABLE",
+    "unit": "metre",
+    "unitPrice": 65,
+    "costPrice": 48,
+    "warrantyMonths": 60,
+    "description": "UV-resistant double-insulated DC cable."
+  },
+  {
+    "sku": "CABLE-AC-4MM",
+    "name": "4 mm² AC Armoured Cable (per metre)",
+    "category": "CABLE",
+    "unit": "metre",
+    "unitPrice": 85,
+    "costPrice": 62,
+    "warrantyMonths": 60,
+    "description": "Copper AC cable for inverter-to-grid connection."
+  },
+  {
+    "sku": "MC4-PAIR",
+    "name": "MC4 Connector Pair",
+    "category": "BOS",
+    "unit": "pair",
+    "unitPrice": 450,
+    "costPrice": 280,
+    "warrantyMonths": 60,
+    "description": "IP68 solar connector pair for panel string wiring."
+  },
+  {
+    "sku": "EARTH-KIT",
+    "name": "Safety Earthing Kit",
+    "category": "BOS",
+    "unit": "kit",
+    "unitPrice": 4500,
+    "costPrice": 3400,
+    "warrantyMonths": 60,
+    "description": "Copper-bonded earth rod, chemical earthing compound and clamps."
+  },
+  {
+    "sku": "ACDB-3K",
+    "name": "AC Distribution Box",
+    "category": "BOS",
+    "unit": "unit",
+    "unitPrice": 6500,
+    "costPrice": 5000,
+    "warrantyMonths": 60,
+    "description": "IP65 ACDB with MCB, RCCB and surge protection."
+  },
+  {
+    "sku": "DCDB-3K",
+    "name": "DC Distribution Box",
+    "category": "BOS",
+    "unit": "unit",
+    "unitPrice": 5500,
+    "costPrice": 4200,
+    "warrantyMonths": 60,
+    "description": "DC isolator and fuse box for panel strings."
+  },
+  {
+    "sku": "LA-KIT",
+    "name": "Lightning Arrester Kit",
+    "category": "BOS",
+    "unit": "kit",
+    "unitPrice": 3800,
+    "costPrice": 2900,
+    "warrantyMonths": 60,
+    "description": "Roof-mounted lightning arrester with down conductor."
+  },
+  {
+    "sku": "INSTALL-KW",
+    "name": "Installation & Commissioning (per kW)",
+    "category": "SERVICE",
+    "unit": "kW",
+    "unitPrice": 8000,
+    "costPrice": 5200,
+    "warrantyMonths": 12,
+    "description": "Crew labour, mounting, wiring, testing and commissioning."
+  },
+  {
+    "sku": "SURVEY",
+    "name": "Roof Survey Visit",
+    "category": "SERVICE",
+    "unit": "visit",
+    "unitPrice": 1500,
+    "costPrice": 900,
+    "warrantyMonths": 0,
+    "description": "On-site roof measurement, shadow analysis and electrical check."
+  },
+  {
+    "sku": "COMMISSIONING",
+    "name": "Grid Synchronisation & Net Metering",
+    "category": "SERVICE",
+    "unit": "job",
+    "unitPrice": 3000,
+    "costPrice": 1800,
+    "warrantyMonths": 0,
+    "description": "DISCOM coordination, net meter application and grid sync."
+  },
+  {
+    "sku": "TOOL-DRILL",
+    "name": "Bosch Hammer Drill",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 12500,
+    "costPrice": 12500,
+    "warrantyMonths": 12,
+    "description": "Crew tool: 800 W hammer drill for roof anchors."
+  },
+  {
+    "sku": "TOOL-MC4-CRIMP",
+    "name": "MC4 Crimping Tool",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 2800,
+    "costPrice": 2800,
+    "warrantyMonths": 12,
+    "description": "Crew tool: ratchet crimper for MC4 connectors."
+  },
+  {
+    "sku": "TOOL-CLAMP-METER",
+    "name": "Digital Clamp Meter",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 4200,
+    "costPrice": 4200,
+    "warrantyMonths": 12,
+    "description": "Crew tool: true-RMS clamp meter for DC/AC current checks."
+  },
+  {
+    "sku": "TOOL-EARTH-TESTER",
+    "name": "Earth Resistance Tester",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 9500,
+    "costPrice": 9500,
+    "warrantyMonths": 12,
+    "description": "Crew tool: digital earth tester for earthing compliance."
+  },
+  {
+    "sku": "TOOL-MULTIMETER",
+    "name": "Fluke Digital Multimeter",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 7800,
+    "costPrice": 7800,
+    "warrantyMonths": 24,
+    "description": "Crew tool: CAT III multimeter for voltage and continuity."
+  },
+  {
+    "sku": "TOOL-HARNESS",
+    "name": "Full Body Safety Harness",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 3600,
+    "costPrice": 3600,
+    "warrantyMonths": 12,
+    "description": "Crew tool: IS-certified full body harness with lanyard."
+  },
+  {
+    "sku": "TOOL-GRINDER",
+    "name": "4-inch Angle Grinder",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 3400,
+    "costPrice": 3400,
+    "warrantyMonths": 12,
+    "description": "Crew tool: angle grinder for structure trimming."
+  },
+  {
+    "sku": "TOOL-LASER",
+    "name": "Laser Distance Meter",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 5200,
+    "costPrice": 5200,
+    "warrantyMonths": 12,
+    "description": "Crew tool: 40 m laser measure for roof surveys."
+  },
+  {
+    "sku": "TOOL-TORQUE",
+    "name": "Torque Wrench Set",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 4600,
+    "costPrice": 4600,
+    "warrantyMonths": 12,
+    "description": "Crew tool: calibrated torque wrench for module clamps."
+  },
+  {
+    "sku": "TOOL-LADDER",
+    "name": "Aluminium Extension Ladder",
+    "category": "TOOL",
+    "unit": "unit",
+    "unitPrice": 8900,
+    "costPrice": 8900,
+    "warrantyMonths": 12,
+    "description": "Crew tool: 12 ft aluminium extension ladder."
+  }
+]

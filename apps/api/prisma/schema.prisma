@@ -1,0 +1,599 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DIRECTOR
+  SALES
+  TECHNICIAN
+  WAREHOUSE
+  SUPPORT
+}
+
+enum LeadSource {
+  WEB_FORM
+  WHATSAPP
+  PHONE
+  WALK_IN
+}
+
+enum SystemType {
+  ON_GRID
+  OFF_GRID
+}
+
+enum LeadStatus {
+  NEW
+  VERIFIED
+  SURVEY_SCHEDULED
+  SURVEY_COMPLETED
+  QUOTED
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  ADVANCE_PAID
+  READY_TO_DISPATCH
+  DISPATCHED
+  INSTALLED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  CASH
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+}
+
+enum PaymentType {
+  ADVANCE
+  BALANCE
+  FULL
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ProductCategory {
+  PANEL
+  INVERTER
+  BATTERY
+  CHARGE_CONTROLLER
+  STRUCTURE
+  CABLE
+  BOS
+  SERVICE
+  TOOL
+}
+
+enum UnitStatus {
+  IN_STOCK
+  RESERVED
+  DISPATCHED
+  INSTALLED
+  FAULTY
+  RETURNED
+}
+
+enum JobType {
+  SURVEY
+  INSTALLATION
+  REPAIR
+}
+
+enum JobStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum WarrantyStatus {
+  IN_WARRANTY
+  OUT_OF_WARRANTY
+  UNKNOWN
+}
+
+enum InvoiceType {
+  SALES
+  REPAIR
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+}
+
+enum SubsidyStatus {
+  NOT_STARTED
+  DOCUMENTS_PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+  DISBURSED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  phone        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedLeads  Lead[]        @relation("LeadAssignee")
+  surveys        Survey[]
+  quotes         Quote[]       @relation("QuoteCreator")
+  approvedOrders Order[]       @relation("OrderApprover")
+  submittedPayments Payment[]  @relation("PaymentSubmitter")
+  approvedPayments  Payment[]  @relation("PaymentApprover")
+  jobs           Job[]         @relation("JobTechnician")
+  photos         JobPhoto[]
+  timeLogs       TimeLog[]
+  assignedTickets Ticket[]     @relation("TicketAssignee")
+  ticketUpdates  TicketUpdate[]
+  invoices       Invoice[]     @relation("InvoiceCreator")
+  expenses       Expense[]     @relation("ExpenseCreator")
+  auditLogs      AuditLog[]
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String   @unique
+  email        String?
+  address      String
+  city         String?
+  state        String?
+  pincode      String?
+  monthlyBill  Int?
+  roofAreaSqft Int?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  leads     Lead[]
+  quotes    Quote[]
+  orders    Order[]
+  jobs      Job[]
+  tickets   Ticket[]
+  invoices  Invoice[]
+  subsidies SubsidyRecord[]
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  reference    String     @unique
+  customerId   String
+  source       LeadSource @default(WEB_FORM)
+  requestedKw  Int
+  systemType   SystemType @default(ON_GRID)
+  status       LeadStatus @default(NEW)
+  assignedToId String?
+  monthlyBill  Int?
+  roofAreaSqft Int?
+  notes        String?
+  lostReason   String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  assignedTo User?     @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  survey     Survey?
+  quotes     Quote[]
+  orders     Order[]
+  jobs       Job[]
+
+  @@index([status])
+  @@index([assignedToId])
+}
+
+model Survey {
+  id                  String    @id @default(cuid())
+  leadId              String    @unique
+  technicianId        String?
+  scheduledAt         DateTime?
+  completedAt         DateTime?
+  roofDirection       String?
+  tiltDegrees         Int?
+  cableDistanceM      Int?
+  shadowFreeAreaSqft  Int?
+  approved            Boolean   @default(false)
+  findings            String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  technician User? @relation(fields: [technicianId], references: [id])
+}
+
+model Quote {
+  id            String      @id @default(cuid())
+  quoteNumber   String      @unique
+  leadId        String?
+  customerId    String
+  systemType    SystemType
+  capacityKw    Int
+  subtotal      Int
+  discount      Int         @default(0)
+  taxRate       Float       @default(13.8)
+  taxAmount     Int
+  total         Int
+  status        QuoteStatus @default(DRAFT)
+  validUntil    DateTime?
+  advanceAmount Int
+  publicToken   String      @unique
+  notes         String?
+  createdById   String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  lead     Lead?        @relation(fields: [leadId], references: [id])
+  customer Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User        @relation("QuoteCreator", fields: [createdById], references: [id])
+  items    QuoteItem[]
+  order    Order?
+
+  @@index([status])
+}
+
+model QuoteItem {
+  id          String          @id @default(cuid())
+  quoteId     String
+  productId   String?
+  description String
+  category    ProductCategory
+  quantity    Int
+  unit        String
+  unitPrice   Int
+  total       Int
+  sortOrder   Int             @default(0)
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+}
+
+model Product {
+  id             String          @id @default(cuid())
+  sku            String          @unique
+  name           String
+  category       ProductCategory
+  unit           String
+  unitPrice      Int
+  costPrice      Int
+  warrantyMonths Int             @default(24)
+  capacityKw     Float?
+  description    String?
+  barcodePath    String?
+  active         Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  quoteItems     QuoteItem[]
+  inventoryUnits InventoryUnit[]
+  kitItems       KitItem[]
+  tickets        Ticket[]
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  orderNumber  String      @unique
+  quoteId      String      @unique
+  leadId       String?
+  customerId   String
+  status       OrderStatus @default(PENDING_PAYMENT)
+  total        Int
+  advancePaid  Int         @default(0)
+  balanceDue   Int
+  approvedById String?
+  approvedAt   DateTime?
+  dispatchAt   DateTime?
+  installedAt  DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  quote          Quote           @relation(fields: [quoteId], references: [id])
+  lead           Lead?           @relation(fields: [leadId], references: [id])
+  customer       Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  approvedBy     User?           @relation("OrderApprover", fields: [approvedById], references: [id])
+  payments       Payment[]
+  kitItems       KitItem[]
+  inventoryUnits InventoryUnit[]
+  job            Job?
+  invoices       Invoice[]
+  tickets        Ticket[]
+  subsidy        SubsidyRecord?
+
+  @@index([status])
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  orderId       String?
+  ticketId      String?
+  amount        Int
+  method        PaymentMethod @default(UPI)
+  type          PaymentType   @default(ADVANCE)
+  status        PaymentStatus @default(PENDING)
+  screenshotUrl String?
+  reference     String?
+  notes         String?
+  submittedById String?
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  order       Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticket      Ticket? @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  submittedBy User?   @relation("PaymentSubmitter", fields: [submittedById], references: [id])
+  approvedBy  User?   @relation("PaymentApprover", fields: [approvedById], references: [id])
+
+  @@index([status])
+  @@index([orderId])
+}
+
+model InventoryUnit {
+  id               String     @id @default(cuid())
+  productId        String
+  serialNumber     String     @unique
+  status           UnitStatus @default(IN_STOCK)
+  warehouseLocation String?
+  orderId          String?
+  warrantyStart    DateTime?
+  warrantyEnd      DateTime?
+  dispatchedAt     DateTime?
+  installedAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+  order   Order?  @relation(fields: [orderId], references: [id])
+
+  @@index([status])
+  @@index([productId])
+}
+
+model KitItem {
+  id        String    @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  packed    Boolean   @default(false)
+  packedAt  DateTime?
+  notes     String?
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([orderId, productId])
+}
+
+model Job {
+  id             String    @id @default(cuid())
+  jobNumber      String    @unique
+  orderId        String?   @unique
+  leadId         String?
+  customerId     String
+  type           JobType
+  status         JobStatus @default(SCHEDULED)
+  technicianId   String?
+  scheduledDate  DateTime
+  scheduledSlot  String?
+  clockInAt      DateTime?
+  clockOutAt     DateTime?
+  hoursWorked    Float?
+  notes          String?
+  completionNotes String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  order      Order?      @relation(fields: [orderId], references: [id])
+  lead       Lead?       @relation(fields: [leadId], references: [id])
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  technician User?       @relation("JobTechnician", fields: [technicianId], references: [id])
+  photos     JobPhoto[]
+  signature  JobSignature?
+  timeLogs   TimeLog[]
+  expenses   Expense[]
+
+  @@index([status])
+  @@index([scheduledDate])
+  @@index([technicianId])
+}
+
+model JobPhoto {
+  id           String   @id @default(cuid())
+  jobId        String
+  url          String
+  caption      String?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  job        Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  uploadedBy User? @relation(fields: [uploadedById], references: [id])
+}
+
+model JobSignature {
+  id         String   @id @default(cuid())
+  jobId      String   @unique
+  signerName String
+  dataUrl    String   @db.Text
+  signedAt   DateTime @default(now())
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model TimeLog {
+  id        String    @id @default(cuid())
+  jobId     String
+  userId    String
+  clockIn   DateTime
+  clockOut  DateTime?
+  minutes   Int?
+  notes     String?
+
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Ticket {
+  id                  String         @id @default(cuid())
+  ticketNumber        String         @unique
+  customerId          String
+  orderId             String?
+  productId           String?
+  serialNumber        String?
+  issue               String
+  faultCode           String?
+  priority            TicketPriority @default(MEDIUM)
+  status              TicketStatus   @default(OPEN)
+  warrantyStatus      WarrantyStatus @default(UNKNOWN)
+  warrantyEnd         DateTime?
+  billable            Boolean        @default(false)
+  laborCharge         Int            @default(0)
+  partsCharge         Int            @default(0)
+  totalCharge         Int            @default(0)
+  assignedToId        String?
+  resolution          String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  resolvedAt          DateTime?
+  closedAt            DateTime?
+  customerConfirmedAt DateTime?
+
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order      Order?         @relation(fields: [orderId], references: [id])
+  product    Product?       @relation(fields: [productId], references: [id])
+  assignedTo User?          @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  updates    TicketUpdate[]
+  invoices   Invoice[]
+  payments   Payment[]
+
+  @@index([status])
+  @@index([serialNumber])
+}
+
+model TicketUpdate {
+  id         String   @id @default(cuid())
+  ticketId   String
+  authorId   String?
+  message    String
+  statusFrom String?
+  statusTo   String?
+  createdAt  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?  @relation(fields: [authorId], references: [id])
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  customerId    String
+  orderId       String?       @unique
+  ticketId      String?       @unique
+  type          InvoiceType
+  subtotal      Int
+  taxRate       Float         @default(13.8)
+  taxAmount     Int
+  total         Int
+  status        InvoiceStatus @default(DRAFT)
+  dueDate       DateTime?
+  paidAt        DateTime?
+  createdById   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order     Order?   @relation(fields: [orderId], references: [id])
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id])
+  createdBy User?    @relation("InvoiceCreator", fields: [createdById], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  category    String
+  description String
+  amount      Int
+  jobId       String?
+  date        DateTime @default(now())
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  job       Job?  @relation(fields: [jobId], references: [id])
+  createdBy User? @relation("ExpenseCreator", fields: [createdById], references: [id])
+}
+
+model SubsidyRecord {
+  id                String        @id @default(cuid())
+  customerId        String
+  orderId           String?       @unique
+  scheme            String        @default("PM Surya Ghar")
+  status            SubsidyStatus @default(NOT_STARTED)
+  amount            Int           @default(0)
+  applicationNumber String?
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order    Order?   @relation(fields: [orderId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}

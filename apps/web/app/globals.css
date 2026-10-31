@@ -1,0 +1,123 @@
+:root {
+  --sp-navy: #0b1f33;
+  --sp-navy-2: #123b57;
+  --sp-sun: #f5a800;
+  --sp-sun-soft: #fff4d1;
+  --sp-teal: #0f766e;
+  --sp-muted: #64748b;
+  --sp-border: #e2e8f0;
+  --sp-bg: #f4f7fa;
+  --sp-card: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  min-height: 100%;
+  background: var(--sp-bg);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: #ffd977;
+  color: #0b1f33;
+}
+
+.sp-sun-gradient {
+  background:
+    radial-gradient(900px 420px at 85% -10%, rgba(245, 168, 0, 0.3), transparent 60%),
+    radial-gradient(700px 500px at 0% 0%, rgba(56, 189, 248, 0.18), transparent 55%),
+    linear-gradient(135deg, #071a2b 0%, #0b1f33 55%, #123b57 100%);
+}
+
+.sp-glass {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+}
+
+.sp-soft-card {
+  background: #fff;
+  border: 1px solid var(--sp-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+.sp-hover-lift {
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sp-hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.09);
+}
+
+.sp-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.sp-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.sp-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.sp-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.sp-mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.sp-print-only {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+
+  .sp-no-print {
+    display: none !important;
+  }
+
+  .sp-print-only {
+    display: block;
+  }
+
+  .sp-print-surface {
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+}
+
+@media (max-width: 48em) {
+  .sp-hide-mobile {
+    display: none !important;
+  }
+}

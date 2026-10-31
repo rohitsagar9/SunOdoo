@@ -43,6 +43,7 @@ import {
   Warehouse,
 } from 'lucide-react';
 import { Logo } from '@/components/Brand';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { initials } from '@/lib/format';
 import { homeForRole, useAuth } from '@/lib/auth';
 import type { Role } from '@/lib/types';
@@ -116,8 +117,8 @@ const sections: Array<{ label: string; items: NavItem[] }> = [
         icon: LifeBuoy,
         roles: ['SUPPORT', 'DIRECTOR', 'SALES', 'TECHNICIAN'],
       },
-      { label: 'Subsidies', href: '/dashboard/subsidies', icon: Landmark, roles: ['DIRECTOR', 'SALES'] },
-      { label: 'Expenses', href: '/dashboard/expenses', icon: Receipt, roles: ['DIRECTOR', 'SALES'] },
+      { label: 'Subsidies', href: '/dashboard/subsidies', icon: Landmark, roles: ['DIRECTOR'] },
+      { label: 'Expenses', href: '/dashboard/expenses', icon: Receipt, roles: ['DIRECTOR'] },
     ],
   },
 ];
@@ -182,9 +183,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       navbar={{ width: 268, breakpoint: 'md', collapsed: { mobile: !opened } }}
       padding="lg"
       styles={{
-        main: { background: '#f4f7fa', minHeight: '100vh' },
-        navbar: { background: '#ffffff', borderRight: '1px solid #e2e8f0' },
-        header: { background: '#ffffff', borderBottom: '1px solid #e2e8f0' },
+        main: { background: 'var(--sp-bg)', minHeight: '100vh', color: 'var(--sp-headings)' },
+        navbar: { background: 'var(--sp-sidebar)', borderRight: '1px solid var(--sp-border)' },
+        header: { background: 'var(--sp-card)', borderBottom: '1px solid var(--sp-border)' },
       }}
     >
       <AppShell.Header px={{ base: 'md', md: 'lg' }}>
@@ -199,6 +200,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </Group>
 
           <Group gap="sm" wrap="nowrap">
+            <ThemeToggle />
             <ActionIcon
               variant="subtle"
               color="gray"

@@ -1,13 +1,42 @@
 :root {
-  --sp-navy: #0b1f33;
-  --sp-navy-2: #123b57;
-  --sp-sun: #f5a800;
-  --sp-sun-soft: #fff4d1;
+  --sp-primary: #783CF6;
+  --sp-primary-hover: #6530DC;
+  --sp-sidebar: #F8F3FF;
+  --sp-active-menu: #EBDDFF;
+  --sp-bg: #FCFAFF;
+  --sp-card: #FFFFFF;
+  --sp-headings: #24143F;
+  --sp-secondary: #786B8D;
+  --sp-border: #EDE5F7;
+  --sp-highlight: #C092FA;
+
+  /* legacy compatibility */
+  --sp-navy: #24143F;
+  --sp-navy-2: #38235E;
+  --sp-sun: #783CF6;
+  --sp-sun-soft: #F8F3FF;
   --sp-teal: #0f766e;
-  --sp-muted: #64748b;
-  --sp-border: #e2e8f0;
-  --sp-bg: #f4f7fa;
-  --sp-card: #ffffff;
+  --sp-muted: #786B8D;
+}
+
+[data-mantine-color-scheme="dark"] {
+  --sp-primary: #9B62F8;
+  --sp-primary-hover: #783CF6;
+  --sp-sidebar: #1A112E;
+  --sp-active-menu: #321B59;
+  --sp-bg: #110B1E;
+  --sp-card: #1B1230;
+  --sp-headings: #F8F3FF;
+  --sp-secondary: #B6A7D0;
+  --sp-border: #35215A;
+  --sp-highlight: #C092FA;
+
+  --sp-navy: #F8F3FF;
+  --sp-navy-2: #B6A7D0;
+  --sp-sun: #9B62F8;
+  --sp-sun-soft: #271646;
+  --sp-teal: #2dd4bf;
+  --sp-muted: #B6A7D0;
 }
 
 * {
@@ -20,7 +49,7 @@ body {
   margin: 0;
   min-height: 100%;
   background: var(--sp-bg);
-  color: #0f172a;
+  color: var(--sp-headings);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -31,15 +60,15 @@ a {
 }
 
 ::selection {
-  background: #ffd977;
-  color: #0b1f33;
+  background: var(--sp-highlight);
+  color: #24143F;
 }
 
 .sp-sun-gradient {
   background:
-    radial-gradient(900px 420px at 85% -10%, rgba(245, 168, 0, 0.3), transparent 60%),
-    radial-gradient(700px 500px at 0% 0%, rgba(56, 189, 248, 0.18), transparent 55%),
-    linear-gradient(135deg, #071a2b 0%, #0b1f33 55%, #123b57 100%);
+    radial-gradient(900px 420px at 85% -10%, rgba(120, 60, 246, 0.3), transparent 60%),
+    radial-gradient(700px 500px at 0% 0%, rgba(192, 146, 250, 0.18), transparent 55%),
+    linear-gradient(135deg, #180D2D 0%, #24143F 55%, #351A5E 100%);
 }
 
 .sp-glass {
@@ -49,9 +78,9 @@ a {
 }
 
 .sp-soft-card {
-  background: #fff;
+  background: var(--sp-card);
   border: 1px solid var(--sp-border);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 1px 3px rgba(36, 20, 63, 0.04);
 }
 
 .sp-hover-lift {

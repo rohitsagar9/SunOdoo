@@ -39,6 +39,7 @@ import {
 } from '@mantine/core';
 import { Logo } from '@/components/Brand';
 import { InquiryForm } from '@/components/InquiryForm';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import classes from './landing.module.css';
 
 const steps = [
@@ -186,6 +187,7 @@ export default function LandingPage() {
             <Link href="/portal">Customer portal</Link>
           </Group>
           <Group gap="sm">
+            <ThemeToggle />
             <Button variant="subtle" color="gray" component={Link} href="/login" className={classes.loginLink}>
               Staff login
             </Button>

@@ -46,6 +46,7 @@ import type { PublicTrack } from '@/lib/types';
 import { Logo } from '@/components/Brand';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, LoadingState } from '@/components/States';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function CustomerPortalPage() {
   const queryClient = useQueryClient();
@@ -130,12 +131,13 @@ export default function CustomerPortalPage() {
   const openTickets = customer?.tickets.filter((ticket) => ticket.status !== 'CLOSED') ?? [];
 
   return (
-    <Box mih="100vh" style={{ background: '#f4f7fa' }}>
+    <Box mih="100vh" style={{ background: 'var(--sp-bg)' }}>
       <Box className="sp-sun-gradient" pb={64} pt="lg">
         <Container size={1040}>
           <Group justify="space-between" align="center" wrap="wrap" gap="sm">
             <Logo href="/" light />
             <Group gap="md">
+              <ThemeToggle />
               <Button
                 component="a"
                 href="tel:+919876543210"

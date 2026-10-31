@@ -47,6 +47,7 @@ import { formatDate, formatDateTime, formatINR, systemLabel, titleCase } from '@
 import { Logo } from '@/components/Brand';
 import { PaymentQR } from '@/components/PaymentQR';
 import { StatusBadge } from '@/components/StatusBadge';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface PublicQuote {
   id: string;
@@ -222,6 +223,7 @@ export default function PublicQuotePage() {
           <Group justify="space-between" align="center" wrap="wrap" gap="sm">
             <Logo href="/" light />
             <Group gap="md">
+              <ThemeToggle />
               <Button
                 component="a"
                 href="tel:+919876543210"

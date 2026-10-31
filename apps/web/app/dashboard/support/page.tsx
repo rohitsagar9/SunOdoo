@@ -35,14 +35,15 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   ShieldCheck,
   Siren,
   Wrench,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, safeValue, titleCase } from '@/lib/format';
+import { formatDate, formatINR, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import type { DashboardSupport, SupportLookup, Ticket } from '@/lib/types';
+import type { DashboardSupport, SupportHandoverItem, SupportLookup, Ticket } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -69,6 +70,8 @@ function SupportDesk() {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [newOpen, setNewOpen] = useState(false);
+  const [handoverModalOpen, setHandoverModalOpen] = useState(false);
+  const [selectedHandover, setSelectedHandover] = useState<SupportHandoverItem | null>(null);
   const [ticketForm, setTicketForm] = useState({
     phone: '',
     serialNumber: '',
@@ -122,6 +125,28 @@ function SupportDesk() {
       notifications.show({ title: 'Could not create ticket', message: apiError(error), color: 'red' }),
   });
 
+  const handoverMutation = useMutation({
+    mutationFn: async (orderId: string) =>
+      (await api.post(`/dashboard/support/handover/${orderId}`)).data,
+    onSuccess: (data: { message?: string }) => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'support'] });
+      notifications.show({
+        title: 'Support card & congrats sent!',
+        message: data.message || 'Customer marked as MAINTENANCE.',
+        color: 'teal',
+      });
+      setHandoverModalOpen(false);
+      setSelectedHandover(null);
+    },
+    onError: (error) => {
+      notifications.show({
+        title: 'Handover failed',
+        message: apiError(error),
+        color: 'red',
+      });
+    },
+  });
+
   const dashboard = dashboardQuery.data;
   const tickets = ticketsQuery.data ?? dashboard?.recentTickets ?? [];
   const openCount = dashboard?.kpis.open ?? tickets.filter((ticket) => ticket.status === 'OPEN').length;
@@ -170,7 +195,7 @@ function SupportDesk() {
         }
       />
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
+      <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: isSupportDesk ? 6 : 4 }} spacing="md" mb="md">
         <StatCard
           label="Open tickets"
           value={String(openCount)}
@@ -200,6 +225,24 @@ function SupportDesk() {
           icon={AlertTriangle}
           color="red"
         />
+        {isSupportDesk && (
+          <>
+            <StatCard
+              label="Pending Handover"
+              value={String(dashboard?.kpis.pendingHandover ?? 0)}
+              hint="Paid & completed orders"
+              icon={Clock3}
+              color="orange"
+            />
+            <StatCard
+              label="In Maintenance"
+              value={String(dashboard?.kpis.maintenanceActive ?? 0)}
+              hint="Support card active"
+              icon={ShieldCheck}
+              color="teal"
+            />
+          </>
+        )}
       </SimpleGrid>
 
       <Grid gap="md">
@@ -259,7 +302,15 @@ function SupportDesk() {
                       <ScrollArea h={340}>
                         <Stack gap="sm">
                           {lookupQuery.data.customers.map((customer) => (
-                            <Box key={customer.id} p="sm" style={{ border: '1px solid #eef2f7', borderRadius: 10 }}>
+                            <Box
+                              key={customer.id}
+                              p="sm"
+                              style={{
+                                border: '1px solid var(--sp-border)',
+                                borderRadius: 10,
+                                background: 'var(--sp-card-subtle)',
+                              }}
+                            >
                               <Group justify="space-between" wrap="nowrap">
                                 <div>
                                   <Text fz="sm" fw={700}>
@@ -421,6 +472,112 @@ function SupportDesk() {
               </Panel>
             )}
 
+            {isSupportDesk && dashboard?.handoverQueue && dashboard.handoverQueue.length > 0 && (
+              <Panel
+                title="Completed installations & AMC handover"
+                subtitle="Fully paid and installed solar plants — send customer congrats and activate maintenance"
+                action={
+                  <Badge color={dashboard.kpis.pendingHandover ? 'orange' : 'teal'} variant="light">
+                    {dashboard.kpis.pendingHandover ?? 0} pending handover
+                  </Badge>
+                }
+                padding={0}
+              >
+                <ScrollArea>
+                  <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" miw={750}>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Customer & Order</Table.Th>
+                        <Table.Th>System Specs</Table.Th>
+                        <Table.Th>Installation</Table.Th>
+                        <Table.Th>Handover Status</Table.Th>
+                        <Table.Th ta="right">Action</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {dashboard.handoverQueue.map((item) => (
+                        <Table.Tr key={item.id}>
+                          <Table.Td>
+                            <Text fz="sm" fw={700} style={{ color: 'var(--sp-headings)' }}>
+                              {item.customerName}
+                            </Text>
+                            <Text fz={10} c="dimmed" className="sp-mono">
+                              {item.orderNumber} · {item.customerPhone}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text fz="xs" fw={600}>
+                              {item.systemSizeKw} kW {titleCase(item.systemType)}
+                            </Text>
+                            <Text fz={10} c="teal" fw={600}>
+                              {formatINR(item.total)} · 100% Paid
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text fz="xs">
+                              {formatDate(item.installedAt || item.completedAt)}
+                            </Text>
+                            <Text fz={10} c="dimmed">
+                              Tech: {item.technicianName}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            {item.status === 'MAINTENANCE' ? (
+                              <div>
+                                <Badge color="teal" variant="light" size="sm">
+                                  MAINTENANCE ACTIVE
+                                </Badge>
+                                <Text fz={10} c="dimmed" mt={2}>
+                                  Card {item.cardCode} sent
+                                </Text>
+                              </div>
+                            ) : (
+                              <div>
+                                <Badge color="orange" variant="light" size="sm">
+                                  PENDING
+                                </Badge>
+                                <Text fz={10} c="dimmed" mt={2}>
+                                  Awaiting support card
+                                </Text>
+                              </div>
+                            )}
+                          </Table.Td>
+                          <Table.Td ta="right">
+                            {item.status === 'PENDING' ? (
+                              <Button
+                                size="compact-xs"
+                                color="teal"
+                                leftSection={<Send size={12} />}
+                                onClick={() => {
+                                  setSelectedHandover(item);
+                                  setHandoverModalOpen(true);
+                                }}
+                              >
+                                Send Congrats & Card
+                              </Button>
+                            ) : (
+                              <Button
+                                size="compact-xs"
+                                variant="light"
+                                color="teal"
+                                leftSection={<ShieldCheck size={12} />}
+                                onClick={() => {
+                                  setSelectedHandover(item);
+                                  setHandoverModalOpen(true);
+                                }}
+                              >
+                                View Support Card
+                              </Button>
+                            )}
+                          </Table.Td>
+                        </Table.Tr>
+                      ))}
+                    </Table.Tbody>
+                  </Table>
+                </ScrollArea>
+              </Panel>
+            )}
+
             <Panel
               title={isSupportDesk ? 'Recent tickets' : 'All tickets'}
               subtitle="Warranty status is set automatically from the serial"
@@ -523,11 +680,15 @@ function SupportDesk() {
                     <Box
                       key={unit.id}
                       p="sm"
-                      style={{ border: '1px solid #fef2f2', borderRadius: 10, background: '#fffafa' }}
+                      style={{
+                        border: '1px solid var(--sp-border)',
+                        borderRadius: 10,
+                        background: 'var(--sp-card-subtle)',
+                      }}
                     >
                       <Group justify="space-between" wrap="nowrap">
                         <div>
-                          <Text fz="xs" fw={700} className="sp-mono">
+                          <Text fz="xs" fw={700} className="sp-mono" style={{ color: 'var(--sp-headings)' }}>
                             {unit.serialNumber}
                           </Text>
                           <Text fz={10} c="dimmed">
@@ -727,6 +888,135 @@ function SupportDesk() {
           </Group>
         </Stack>
       </Modal>
+
+      <Modal
+        opened={handoverModalOpen}
+        onClose={() => {
+          setHandoverModalOpen(false);
+          setSelectedHandover(null);
+        }}
+        title={
+          <Group gap="xs">
+            <ShieldCheck size={20} color="#0f766e" />
+            <Text fw={700}>SunOdoo Customer Welcome & Support Handover Card</Text>
+          </Group>
+        }
+        size="lg"
+      >
+        {selectedHandover && (
+          <Stack gap="md">
+            <Box
+              p="md"
+              style={{
+                borderRadius: 12,
+                background: 'linear-gradient(135deg, #064e3b 0%, #0f766e 100%)',
+                color: '#ffffff',
+                boxShadow: '0 4px 12px rgba(15, 118, 110, 0.25)',
+              }}
+            >
+              <Group justify="space-between" align="flex-start" mb="xs">
+                <div>
+                  <Text fz={10} fw={700} style={{ letterSpacing: 1.5, opacity: 0.85, color: '#ffffff' }}>
+                    SUNODOO SOLAR CARE · AMC CARD
+                  </Text>
+                  <Text fz="lg" fw={800} style={{ color: '#ffffff' }}>
+                    {selectedHandover.customerName}
+                  </Text>
+                  <Text fz="xs" style={{ opacity: 0.9, color: '#ffffff' }}>
+                    {selectedHandover.customerPhone} · {selectedHandover.customerCity || selectedHandover.customerAddress || 'Customer Site'}
+                  </Text>
+                </div>
+                <Badge color="yellow" variant="filled" size="md">
+                  {selectedHandover.status === 'MAINTENANCE' ? 'MAINTENANCE ACTIVE' : 'PENDING ACTIVATION'}
+                </Badge>
+              </Group>
+
+              <Group justify="space-between" mt="md" pt="sm" style={{ borderTop: '1px solid rgba(255,255,255,0.2)' }}>
+                <div>
+                  <Text fz={10} style={{ opacity: 0.8, color: '#ffffff' }}>SYSTEM SPECIFICATION</Text>
+                  <Text fz="xs" fw={700} style={{ color: '#ffffff' }}>
+                    {selectedHandover.systemSizeKw} kW {titleCase(selectedHandover.systemType)}
+                  </Text>
+                </div>
+                <div>
+                  <Text fz={10} style={{ opacity: 0.8, color: '#ffffff' }}>ORDER REF</Text>
+                  <Text fz="xs" fw={700} className="sp-mono" style={{ color: '#ffffff' }}>
+                    {selectedHandover.orderNumber}
+                  </Text>
+                </div>
+                <div>
+                  <Text fz={10} style={{ opacity: 0.8, color: '#ffffff' }}>AMC CARD CODE</Text>
+                  <Text fz="xs" fw={700} className="sp-mono" style={{ color: '#ffffff' }}>
+                    {selectedHandover.cardCode}
+                  </Text>
+                </div>
+              </Group>
+            </Box>
+
+            <Box
+              p="sm"
+              style={{
+                borderRadius: 8,
+                background: 'var(--sp-card-subtle)',
+                border: '1px solid var(--sp-border)',
+              }}
+            >
+              <Text fz="xs" fw={700} mb={4} style={{ color: 'var(--sp-headings)' }}>
+                Customer Welcome & Congratulations Dispatch:
+              </Text>
+              <Text fz="xs" c="dimmed" style={{ lineHeight: 1.5 }}>
+                “Dear <b>{selectedHandover.customerName}</b>, congratulations on the successful installation and 100% payment clearance of your <b>{selectedHandover.systemSizeKw} kW SunOdoo Solar System</b>! Your system is now officially covered under our Comprehensive Maintenance Program (AMC Card: <b>{selectedHandover.cardCode}</b>). Our support hotline <b>1800-SUNODOO</b> is available 24/7 for regular checkups, net-metering assistance, and priority warranty service.”
+              </Text>
+            </Box>
+
+            <SimpleGrid cols={2} spacing="xs">
+              <Box p="xs" style={{ border: '1px solid var(--sp-border)', borderRadius: 8 }}>
+                <Text fz={10} c="dimmed">Warranty Coverage</Text>
+                <Text fz="xs" fw={700} style={{ color: 'var(--sp-headings)' }}>25-Yr Panel / 10-Yr Inverter</Text>
+              </Box>
+              <Box p="xs" style={{ border: '1px solid var(--sp-border)', borderRadius: 8 }}>
+                <Text fz={10} c="dimmed">Dedicated Support Helpline</Text>
+                <Text fz="xs" fw={700} style={{ color: 'var(--sp-headings)' }}>1800-SUNODOO (+91 800-786-6366)</Text>
+              </Box>
+            </SimpleGrid>
+
+            {selectedHandover.status === 'MAINTENANCE' ? (
+              <Alert color="teal" variant="light" icon={<CheckCircle2 size={16} />}>
+                Support card was issued and congrats sent on{' '}
+                {formatDate(selectedHandover.congratsSentAt)} by{' '}
+                {selectedHandover.sentBy || 'Support Team'}. Status is <b>MAINTENANCE ACTIVE</b>.
+              </Alert>
+            ) : (
+              <Alert color="orange" variant="light" icon={<Clock3 size={16} />}>
+                Installation is completed and payment is fully settled. Click below to dispatch
+                the congratulatory greeting, generate the AMC support card, and mark the account as <b>MAINTENANCE</b>.
+              </Alert>
+            )}
+
+            <Group justify="flex-end" gap="sm">
+              <Button
+                variant="default"
+                onClick={() => {
+                  setHandoverModalOpen(false);
+                  setSelectedHandover(null);
+                }}
+              >
+                Close
+              </Button>
+              {selectedHandover.status === 'PENDING' && (
+                <Button
+                  color="teal"
+                  leftSection={<Send size={15} />}
+                  loading={handoverMutation.isPending}
+                  onClick={() => handoverMutation.mutate(selectedHandover.id)}
+                >
+                  Send Congrats & Support Card
+                </Button>
+              )}
+            </Group>
+          </Stack>
+        )}
+      </Modal>
     </>
   );
 }
@@ -747,7 +1037,7 @@ function PaperRow({
       component={Link}
       href={href}
       p="sm"
-      style={{ border: '1px solid #eef2f7', borderRadius: 10 }}
+      style={{ border: '1px solid var(--sp-border)', borderRadius: 10, background: 'var(--sp-card-subtle)' }}
       className="sp-hover-lift"
     >
       <Group justify="space-between" wrap="nowrap">

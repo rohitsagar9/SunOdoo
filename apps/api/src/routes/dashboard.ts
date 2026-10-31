@@ -585,7 +585,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: [app.authenticate, app.authorize('SUPPORT', 'DIRECTOR')] },
     async () => {
       const now = new Date();
-      const [open, inProgress, resolved, warrantyUnits, recentTickets, warrantyCounts] =
+      const [open, inProgress, resolved, warrantyUnits, recentTickets, warrantyCounts, completedOrders] =
         await Promise.all([
           prisma.ticket.count({ where: { status: 'OPEN' } }),
           prisma.ticket.count({ where: { status: 'IN_PROGRESS' } }),
@@ -609,7 +609,74 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
             take: 8,
           }),
           prisma.ticket.groupBy({ by: ['warrantyStatus'], _count: { _all: true } }),
+          prisma.order.findMany({
+            where: {
+              status: { in: ['INSTALLED', 'COMPLETED'] },
+              balanceDue: { lte: 0 },
+            },
+            include: {
+              customer: true,
+              quote: true,
+              job: {
+                include: {
+                  technician: { select: { name: true } },
+                },
+              },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: 20,
+          }),
         ]);
+
+      const orderIds = completedOrders.map((o) => o.id);
+      const handoverLogs =
+        orderIds.length > 0
+          ? await prisma.auditLog.findMany({
+              where: {
+                action: 'SUPPORT_CONGRATS_SENT',
+                entity: 'Order',
+                entityId: { in: orderIds },
+              },
+              include: { user: { select: { name: true } } },
+              orderBy: { createdAt: 'desc' },
+            })
+          : [];
+
+      const logMap = new Map<string, (typeof handoverLogs)[0]>();
+      for (const log of handoverLogs) {
+        if (log.entityId && !logMap.has(log.entityId)) {
+          logMap.set(log.entityId, log);
+        }
+      }
+
+      const handoverQueue = completedOrders.map((o) => {
+        const log = logMap.get(o.id);
+        const meta = (log?.meta as Record<string, any>) || {};
+        const isMaintenance = Boolean(log);
+        return {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          customerId: o.customer.id,
+          customerName: o.customer.name,
+          customerPhone: o.customer.phone,
+          customerEmail: o.customer.email,
+          customerAddress: o.customer.address,
+          customerCity: o.customer.city,
+          systemSizeKw: o.quote?.systemSizeKw ?? 5,
+          systemType: o.quote?.systemType ?? 'ON_GRID',
+          total: o.total,
+          installedAt: (o.installedAt || o.completedAt || o.updatedAt).toISOString(),
+          completedAt: (o.completedAt || o.installedAt || o.updatedAt).toISOString(),
+          status: isMaintenance ? ('MAINTENANCE' as const) : ('PENDING' as const),
+          congratsSentAt: log?.createdAt ? log.createdAt.toISOString() : null,
+          sentBy: meta.sentByName || log?.user?.name || null,
+          cardCode: meta.cardCode || `SUN-AMC-${o.orderNumber.replace(/[^0-9]/g, '').slice(-4) || '2026'}`,
+          technicianName: o.job?.technician?.name || 'Field Ops',
+        };
+      });
+
+      const pendingHandover = handoverQueue.filter((h) => h.status === 'PENDING').length;
+      const maintenanceActive = handoverQueue.filter((h) => h.status === 'MAINTENANCE').length;
 
       return {
         kpis: {
@@ -618,6 +685,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           resolved,
           active: open + inProgress,
           warrantyExpiring: warrantyUnits.length,
+          pendingHandover,
+          maintenanceActive,
         },
         warrantyCounts: warrantyCounts.map((row) => ({
           status: row.warrantyStatus,
@@ -631,6 +700,64 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
             : null,
         })),
         recentTickets,
+        handoverQueue,
+      };
+    },
+  );
+
+  app.post<{ Params: { orderId: string } }>(
+    '/dashboard/support/handover/:orderId',
+    { preHandler: [app.authenticate, app.authorize('SUPPORT', 'DIRECTOR')] },
+    async (req, reply) => {
+      const { orderId } = req.params;
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { customer: true, quote: true },
+      });
+
+      if (!order) {
+        return reply.status(404).send({ error: 'Order not found' });
+      }
+
+      if (!['INSTALLED', 'COMPLETED'].includes(order.status) || order.balanceDue > 0) {
+        return reply.status(400).send({
+          error: 'Order must be fully paid and installation completed before support handover',
+        });
+      }
+
+      const cardCode = `SUN-AMC-${order.orderNumber.replace(/[^0-9]/g, '').slice(-4) || '2026'}`;
+      const existingLog = await prisma.auditLog.findFirst({
+        where: {
+          action: 'SUPPORT_CONGRATS_SENT',
+          entity: 'Order',
+          entityId: order.id,
+        },
+      });
+
+      if (!existingLog) {
+        await prisma.auditLog.create({
+          data: {
+            userId: req.user.id,
+            action: 'SUPPORT_CONGRATS_SENT',
+            entity: 'Order',
+            entityId: order.id,
+            meta: {
+              sentByName: req.user.name,
+              customerName: order.customer.name,
+              customerPhone: order.customer.phone,
+              cardCode,
+              sentAt: new Date().toISOString(),
+            },
+          },
+        });
+      }
+
+      return {
+        success: true,
+        orderId: order.id,
+        status: 'MAINTENANCE',
+        cardCode,
+        message: `Congratulations message & support card sent to ${order.customer.name}. Account marked as MAINTENANCE ACTIVE.`,
       };
     },
   );

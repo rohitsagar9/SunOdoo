@@ -360,11 +360,15 @@ function WarehouseOverview() {
                   <Box
                     key={product.id}
                     p="sm"
-                    style={{ border: '1px solid #fef2f2', borderRadius: 10, background: '#fffafa' }}
+                    style={{
+                      border: '1px solid var(--sp-border)',
+                      borderRadius: 10,
+                      background: 'var(--sp-card-subtle)',
+                    }}
                   >
                     <Group justify="space-between" wrap="nowrap">
                       <div>
-                        <Text fz="xs" fw={700}>
+                        <Text fz="xs" fw={700} style={{ color: 'var(--sp-headings)' }}>
                           {product.name}
                         </Text>
                         <Text fz={10} c="dimmed" className="sp-mono">

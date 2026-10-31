@@ -406,8 +406,8 @@ function DirectorDashboard() {
                   p="sm"
                   style={{
                     borderRadius: 8,
-                    background: '#fffbeb',
-                    border: '1px solid #fde68a',
+                    background: 'var(--sp-card-subtle)',
+                    border: '1px solid var(--sp-border)',
                   }}
                 >
                   <Group justify="space-between" align="center" wrap="wrap" gap="sm">

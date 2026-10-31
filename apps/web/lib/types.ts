@@ -382,6 +382,27 @@ export interface DashboardWarehouse {
   warehouseAlerts?: WarehouseAlert[];
 }
 
+export interface SupportHandoverItem {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string | null;
+  customerAddress?: string;
+  customerCity?: string | null;
+  systemSizeKw: number;
+  systemType: string;
+  total: number;
+  installedAt?: string | null;
+  completedAt?: string | null;
+  status: 'PENDING' | 'MAINTENANCE';
+  congratsSentAt?: string | null;
+  sentBy?: string | null;
+  cardCode: string;
+  technicianName?: string | null;
+}
+
 export interface DashboardSupport {
   kpis: {
     open: number;
@@ -389,12 +410,15 @@ export interface DashboardSupport {
     resolved: number;
     active: number;
     warrantyExpiring: number;
+    pendingHandover?: number;
+    maintenanceActive?: number;
   };
   warrantyCounts: Array<{ status: string; count: number }>;
   warrantyUnits: Array<
     InventoryUnit & { warrantyStatus: string; daysLeft: number | null }
   >;
   recentTickets: Ticket[];
+  handoverQueue?: SupportHandoverItem[];
 }
 
 export interface InventorySummaryRow {

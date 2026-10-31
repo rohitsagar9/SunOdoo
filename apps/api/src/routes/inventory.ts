@@ -10,7 +10,7 @@ const unitStatuses = ['IN_STOCK', 'RESERVED', 'DISPATCHED', 'INSTALLED', 'FAULTY
 export const inventoryRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/inventory',
-    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR', 'SALES', 'SUPPORT')] },
+    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR', 'SALES', 'SUPPORT', 'TECHNICIAN')] },
     async (request) => {
       const query = z
         .object({
@@ -40,7 +40,7 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     '/inventory/summary',
-    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR', 'SALES')] },
+    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR', 'SALES', 'SUPPORT', 'TECHNICIAN')] },
     async () => {
       const [products, units] = await Promise.all([
         prisma.product.findMany({

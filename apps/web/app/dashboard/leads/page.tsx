@@ -134,14 +134,16 @@ function LeadsKanban() {
   const grouped = useMemo(() => {
     const map = new Map<string, Lead[]>();
     for (const column of columns) map.set(column.status, []);
-    const items = [...(query.data ?? [])];
+    const items = Array.isArray(query.data) ? [...query.data] : [];
     items.sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
+      const timeA = a?.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b?.createdAt ? new Date(b.createdAt).getTime() : 0;
       return sortOrder === 'fifo' ? timeA - timeB : timeB - timeA;
     });
     for (const lead of items) {
-      map.get(lead.status)?.push(lead);
+      if (lead && lead.status) {
+        map.get(lead.status)?.push(lead);
+      }
     }
     return map;
   }, [query.data, sortOrder]);
@@ -345,7 +347,7 @@ function LeadCard({
       <Group justify="space-between" align="flex-start" wrap="nowrap" mb={6}>
         <div style={{ minWidth: 0 }}>
           <Text fz="sm" fw={700} truncate>
-            {lead.customer.name}
+            {lead.customer?.name ?? 'Customer'}
           </Text>
           <Text fz={10} c="dimmed" className="sp-mono">
             {lead.reference}
@@ -397,7 +399,7 @@ function LeadCard({
         <Group gap={6} wrap="nowrap">
           <Building2 size={12} color="#94a3b8" />
           <Text fz={11} c="dimmed" truncate>
-            {lead.customer.city ?? lead.customer.address}
+            {lead.customer?.city ?? lead.customer?.address ?? ''}
           </Text>
         </Group>
         <Group gap={6} wrap="nowrap">
@@ -419,7 +421,7 @@ function LeadCard({
         <Group gap={4}>
           <Phone size={12} color="#64748b" />
           <Text fz={11} c="dimmed" className="sp-mono">
-            {lead.customer.phone}
+            {lead.customer?.phone ?? ''}
           </Text>
         </Group>
         {quote ? (

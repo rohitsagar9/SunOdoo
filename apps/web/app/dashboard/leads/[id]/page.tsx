@@ -139,14 +139,21 @@ function LeadDetail() {
       roofAreaSqft: lead.roofAreaSqft ? String(lead.roofAreaSqft) : '',
       notes: lead.notes ?? '',
     });
-    setSurveyForm((current) => ({
-      technicianId: lead.survey?.technicianId ?? current.technicianId,
-      scheduledAt: lead.survey?.scheduledAt
-        ? new Date(lead.survey.scheduledAt).toISOString().slice(0, 16)
-        : current.scheduledAt,
-      slot: current.slot,
-      notes: lead.survey?.findings ?? '',
-    }));
+    setSurveyForm((current) => {
+      let sched = current.scheduledAt;
+      if (lead.survey?.scheduledAt) {
+        const d = new Date(lead.survey.scheduledAt);
+        if (!isNaN(d.getTime())) {
+          sched = d.toISOString().slice(0, 16);
+        }
+      }
+      return {
+        technicianId: lead.survey?.technicianId ?? current.technicianId,
+        scheduledAt: sched,
+        slot: current.slot,
+        notes: lead.survey?.findings ?? '',
+      };
+    });
     setSurveyReport({
       roofDirection: lead.survey?.roofDirection ?? '',
       tiltDegrees: lead.survey?.tiltDegrees != null ? String(lead.survey.tiltDegrees) : '',
@@ -180,22 +187,28 @@ function LeadDetail() {
       notifications.show({ title: 'Could not save', message: apiError(error), color: 'red' }),
   });
 
+  const dateStr = surveyForm.scheduledAt ? surveyForm.scheduledAt.slice(0, 10) : '';
+  const isDateValid = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+
   const jobsQuery = useQuery({
-    queryKey: ['jobs-for-slot', surveyForm.technicianId, surveyForm.scheduledAt?.slice(0, 10)],
-    enabled: Boolean(surveyForm.technicianId && surveyForm.scheduledAt),
+    queryKey: ['jobs-for-slot', surveyForm.technicianId, dateStr],
+    enabled: Boolean(surveyForm.technicianId && isDateValid),
     queryFn: async () => {
-      const dateStr = surveyForm.scheduledAt.slice(0, 10);
-      const res = await api.get<Array<{ id: string; scheduledSlot?: string; status: string; leadId?: string }>>('/jobs', {
-        params: { technicianId: surveyForm.technicianId, date: dateStr },
-      });
-      return res.data;
+      try {
+        const res = await api.get<Array<{ id: string; scheduledSlot?: string; status: string; leadId?: string }>>('/jobs', {
+          params: { technicianId: surveyForm.technicianId, date: dateStr },
+        });
+        return Array.isArray(res.data) ? res.data : [];
+      } catch {
+        return [];
+      }
     },
   });
 
   const occupiedSlots = useMemo(() => {
-    const jobs = jobsQuery.data ?? [];
+    const jobs = Array.isArray(jobsQuery.data) ? jobsQuery.data : [];
     return jobs
-      .filter((j) => j.status !== 'CANCELLED' && j.status !== 'COMPLETED' && j.leadId !== id && j.scheduledSlot)
+      .filter((j) => j && j.status !== 'CANCELLED' && j.status !== 'COMPLETED' && j.leadId !== id && j.scheduledSlot)
       .map((j) => j.scheduledSlot!);
   }, [jobsQuery.data, id]);
 
@@ -302,8 +315,8 @@ function LeadDetail() {
     <>
       <PageHeader
         eyebrow={`${lead.reference} · ${titleCase(lead.source)}`}
-        title={lead.customer.name}
-        description={`${lead.requestedKw} kW ${titleCase(lead.systemType)} requirement · ${lead.customer.city ?? lead.customer.address}`}
+        title={lead.customer?.name ?? 'Lead overview'}
+        description={`${lead.requestedKw} kW ${titleCase(lead.systemType)} requirement · ${lead.customer?.city ?? lead.customer?.address ?? 'Location pending'}`}
         actions={
           <>
             <Button
@@ -317,7 +330,7 @@ function LeadDetail() {
             </Button>
             <Button
               component="a"
-              href={`tel:${lead.customer.phone}`}
+              href={`tel:${lead.customer?.phone ?? ''}`}
               variant="light"
               color="teal"
               leftSection={<Phone size={15} />}
@@ -429,10 +442,10 @@ function LeadDetail() {
                     color="sun"
                     onClick={() =>
                       updateMutation.mutate({
-                        requestedKw: details.requestedKw,
+                        requestedKw: Number(details.requestedKw) || 1,
                         systemType: details.systemType,
-                        monthlyBill: details.monthlyBill || 0,
-                        roofAreaSqft: details.roofAreaSqft || 0,
+                        monthlyBill: details.monthlyBill ? Number(details.monthlyBill) : 0,
+                        roofAreaSqft: details.roofAreaSqft ? Number(details.roofAreaSqft) : 0,
                         notes: details.notes,
                       })
                     }

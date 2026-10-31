@@ -47,9 +47,12 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
       let dateFilter = {};
       if (query.date) {
-        const start = new Date(`${query.date}T00:00:00`);
-        const end = new Date(`${query.date}T23:59:59.999`);
-        dateFilter = { scheduledDate: { gte: start, lte: end } };
+        const parsed = new Date(`${query.date}T00:00:00`);
+        if (!isNaN(parsed.getTime())) {
+          const start = parsed;
+          const end = new Date(`${query.date}T23:59:59.999`);
+          dateFilter = { scheduledDate: { gte: start, lte: end } };
+        }
       }
 
       return prisma.job.findMany({

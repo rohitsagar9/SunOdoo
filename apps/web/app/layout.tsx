@@ -3,7 +3,7 @@ import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
 import './globals.css';
-import { ColorSchemeScript } from '@mantine/core';
+import { mantineHtmlProps } from '@mantine/core';
 import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
@@ -24,10 +24,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <ColorSchemeScript />
-      </head>
+    <html lang="en" {...mantineHtmlProps}>
+      <head />
       <body>
         <Providers>{children}</Providers>
       </body>

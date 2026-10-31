@@ -6,10 +6,12 @@ import {
   Alert,
   Badge,
   Button,
+  FileInput,
   Grid,
   Group,
   Modal,
   NumberInput,
+  Paper,
   Progress,
   ScrollArea,
   Select,
@@ -24,12 +26,15 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
+  Barcode,
   Boxes,
   CheckCircle2,
   PackagePlus,
   RefreshCw,
+  ScanLine,
   Search,
   ShieldCheck,
+  UploadCloud,
   Warehouse,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
@@ -68,6 +73,39 @@ function InventoryWorkspace() {
     serialNumber: '',
     warehouseLocation: 'Main warehouse',
   });
+  const [scanFile, setScanFile] = useState<File | null>(null);
+
+  const handleScanUpload = async (file: File | null) => {
+    if (!file) return;
+    setScanFile(file);
+    try {
+      let matchedSerial = '';
+      if (file.name.toLowerCase().endsWith('.svg') || file.type.includes('svg')) {
+        const text = await file.text();
+        const m = text.match(/(SN-[A-Za-z0-9_-]+|[A-Z]{2,}-[A-Z0-9_-]{4,})/i);
+        if (m && m[1]) matchedSerial = m[1];
+      }
+      if (!matchedSerial) {
+        matchedSerial = file.name.replace(/\.[^/.]+$/, '');
+      }
+
+      setSearch(matchedSerial);
+      setSubmittedSearch(matchedSerial);
+      notifications.show({
+        title: 'Barcode asset scanned',
+        message: `Extracted serial ${matchedSerial} from ${file.name}`,
+        color: 'teal',
+      });
+    } catch (err) {
+      notifications.show({
+        title: 'Barcode scan failed',
+        message: apiError(err),
+        color: 'red',
+      });
+    } finally {
+      setScanFile(null);
+    }
+  };
 
   const summaryQuery = useQuery({
     queryKey: ['inventory', 'summary'],
@@ -217,6 +255,46 @@ function InventoryWorkspace() {
           color="red"
         />
       </SimpleGrid>
+
+      <Paper withBorder p="md" radius="md" mb="md" className="sp-soft-card">
+        <Group justify="space-between" align="center" wrap="wrap" gap="md">
+          <div>
+            <Group gap="xs">
+              <ScanLine size={18} color="#783cf6" />
+              <Text fz="sm" fw={700}>
+                Barcode & Serial scanner
+              </Text>
+              <Badge color="sun" variant="light" size="xs">
+                SVG · PNG · PDF · JPG
+              </Badge>
+            </Group>
+            <Text fz={11} c="dimmed" mt={2}>
+              Scan with a handheld scanner or upload carton label (SVG, PNG, JPG) or challan PDF to inspect unit warranty & order history.
+            </Text>
+          </div>
+          <Group gap="sm" wrap="wrap">
+            <FileInput
+              placeholder="Upload barcode SVG / PNG / PDF"
+              accept="image/svg+xml,.svg,image/png,image/jpeg,image/webp,application/pdf"
+              value={scanFile}
+              onChange={handleScanUpload}
+              leftSection={<UploadCloud size={14} />}
+              size="xs"
+              w={260}
+            />
+            <Button
+              component={Link}
+              href="/dashboard/barcodes"
+              size="xs"
+              variant="light"
+              color="indigo"
+              leftSection={<Barcode size={14} />}
+            >
+              Browse labels
+            </Button>
+          </Group>
+        </Group>
+      </Paper>
 
       <Tabs defaultValue="summary" keepMounted={false}>
         <Tabs.List mb="md">

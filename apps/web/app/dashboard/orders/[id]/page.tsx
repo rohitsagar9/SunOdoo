@@ -180,6 +180,30 @@ function OrderDetail() {
         setUploadingDoc(false);
         return;
       }
+
+      let candidateSerial = '';
+      if (file.name.toLowerCase().endsWith('.svg') || file.type.includes('svg')) {
+        const svgContent = await file.text();
+        const serialMatch = svgContent.match(/(SN-[A-Za-z0-9_-]+|[A-Z]{2,}-[A-Z0-9_-]{4,})/i);
+        if (serialMatch && serialMatch[1]) {
+          candidateSerial = serialMatch[1];
+        }
+      }
+
+      if (candidateSerial) {
+        try {
+          await scanMutation.mutateAsync(candidateSerial);
+          notifications.show({
+            title: 'Barcode SVG processed',
+            message: `Auto-scanned ${candidateSerial} directly from SVG asset.`,
+            color: 'teal',
+          });
+          return;
+        } catch {
+          // If direct match was not already in inventory, fallback to available in-stock unit
+        }
+      }
+
       const res = await api.get<{ units: Array<{ serialNumber: string }> }>('/inventory', {
         params: { status: 'IN_STOCK', productId: unscannedRow.item.productId },
       });
@@ -430,14 +454,14 @@ function OrderDetail() {
 
               <Paper withBorder p="sm" radius="md" mb="md" bg="var(--sp-card-bg, #fbfcfe)">
                 <Text fz="xs" fw={700} mb={4}>
-                  Auto-scan serial via document or photo (PDF / JPG / PNG)
+                  Auto-scan serial via barcode or document (SVG / PNG / JPG / PDF)
                 </Text>
                 <Text fz={11} c="dimmed" mb="xs">
-                  Upload delivery challan or carton barcode snapshot. The system registers the serial and decreases available inventory count.
+                  Upload barcode SVG label, carton photo, or delivery challan PDF. The system automatically registers the serial number.
                 </Text>
                 <FileInput
-                  placeholder="Upload barcode photo or challan PDF"
-                  accept="image/png,image/jpeg,image/webp,application/pdf"
+                  placeholder="Upload barcode (SVG, PNG, JPG) or challan PDF"
+                  accept="image/png,image/jpeg,image/webp,application/pdf,image/svg+xml,.svg"
                   value={docFile}
                   onChange={handleDocUpload}
                   disabled={dispatched || uploadingDoc}

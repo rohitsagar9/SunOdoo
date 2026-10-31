@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { notFound } from '../lib/errors.js';
 import { mustScan, warrantyStatus } from '../services/warranty.js';
 
 function startOfDay(date = new Date()) {
@@ -297,17 +299,43 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       ]);
 
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const ordersDispatchedOver24h = await prisma.order.findMany({
-        where: {
-          dispatchAt: { lte: twentyFourHoursAgo },
-          status: { in: ['DISPATCHED', 'INSTALLED', 'COMPLETED'] },
-        },
-        include: {
-          customer: true,
-          job: { include: { expenses: true } },
-        },
-        take: 10,
-      });
+      const [ordersDispatchedOver24h, alertLogs] = await Promise.all([
+        prisma.order.findMany({
+          where: {
+            dispatchAt: { lte: twentyFourHoursAgo },
+            status: { in: ['DISPATCHED', 'INSTALLED', 'COMPLETED'] },
+          },
+          include: {
+            customer: true,
+            job: { include: { expenses: true } },
+          },
+          take: 10,
+        }),
+        prisma.auditLog.findMany({
+          where: { action: 'WAREHOUSE_ALERT_TO_SALES' },
+          include: { user: { select: { id: true, name: true, role: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        }),
+      ]);
+
+      const warehouseAlerts = alertLogs
+        .map((log) => {
+          const meta = (log.meta as Record<string, any>) || {};
+          return {
+            id: log.id,
+            orderId: log.entityId,
+            orderNumber: meta.orderNumber || null,
+            customerName: meta.customerName || null,
+            category: meta.category || 'GENERAL',
+            message: meta.message || '',
+            urgent: Boolean(meta.urgent),
+            resolved: Boolean(meta.resolved),
+            senderName: log.user?.name || meta.senderName || 'Warehouse Staff',
+            createdAt: log.createdAt.toISOString(),
+          };
+        })
+        .filter((a) => !a.resolved);
 
       const inventoryCostAlerts = ordersDispatchedOver24h
         .filter((ord) => {
@@ -352,6 +380,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         recentPayments,
         readyForQuoteLeads: readyForQuoteLeads ?? [],
         inventoryCostAlerts,
+        warehouseAlerts,
       };
     },
   );
@@ -462,16 +491,40 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       });
 
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const ordersDispatchedOver24h = await prisma.order.findMany({
-        where: {
-          dispatchAt: { lte: twentyFourHoursAgo },
-          status: { in: ['DISPATCHED', 'INSTALLED', 'COMPLETED'] },
-        },
-        include: {
-          customer: true,
-          job: { include: { expenses: true } },
-        },
-        take: 10,
+      const [ordersDispatchedOver24h, alertLogs] = await Promise.all([
+        prisma.order.findMany({
+          where: {
+            dispatchAt: { lte: twentyFourHoursAgo },
+            status: { in: ['DISPATCHED', 'INSTALLED', 'COMPLETED'] },
+          },
+          include: {
+            customer: true,
+            job: { include: { expenses: true } },
+          },
+          take: 10,
+        }),
+        prisma.auditLog.findMany({
+          where: { action: 'WAREHOUSE_ALERT_TO_SALES' },
+          include: { user: { select: { id: true, name: true, role: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        }),
+      ]);
+
+      const warehouseAlerts = alertLogs.map((log) => {
+        const meta = (log.meta as Record<string, any>) || {};
+        return {
+          id: log.id,
+          orderId: log.entityId,
+          orderNumber: meta.orderNumber || null,
+          customerName: meta.customerName || null,
+          category: meta.category || 'GENERAL',
+          message: meta.message || '',
+          urgent: Boolean(meta.urgent),
+          resolved: Boolean(meta.resolved),
+          senderName: log.user?.name || meta.senderName || 'Warehouse Staff',
+          createdAt: log.createdAt.toISOString(),
+        };
       });
 
       const inventoryCostAlerts = ordersDispatchedOver24h
@@ -522,6 +575,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         }),
         lowStockProducts,
         inventoryCostAlerts,
+        warehouseAlerts,
       };
     },
   );
@@ -578,6 +632,112 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         })),
         recentTickets,
       };
+    },
+  );
+
+  app.get(
+    '/dashboard/alerts',
+    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'SALES', 'DIRECTOR')] },
+    async () => {
+      const logs = await prisma.auditLog.findMany({
+        where: { action: 'WAREHOUSE_ALERT_TO_SALES' },
+        include: { user: { select: { id: true, name: true, role: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      });
+
+      return logs.map((log) => {
+        const meta = (log.meta as Record<string, any>) || {};
+        return {
+          id: log.id,
+          orderId: log.entityId,
+          orderNumber: meta.orderNumber || null,
+          customerName: meta.customerName || null,
+          category: meta.category || 'GENERAL',
+          message: meta.message || '',
+          urgent: Boolean(meta.urgent),
+          resolved: Boolean(meta.resolved),
+          senderName: log.user?.name || meta.senderName || 'Warehouse Staff',
+          senderRole: log.user?.role || 'WAREHOUSE',
+          createdAt: log.createdAt.toISOString(),
+        };
+      });
+    },
+  );
+
+  app.post(
+    '/dashboard/alerts',
+    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR')] },
+    async (request, reply) => {
+      const body = z
+        .object({
+          orderId: z.string().optional(),
+          orderNumber: z.string().optional(),
+          customerName: z.string().optional(),
+          category: z.string().default('GENERAL'),
+          message: z.string().min(1).max(500),
+          urgent: z.boolean().default(false),
+        })
+        .parse(request.body);
+
+      const sender = await prisma.user.findUnique({
+        where: { id: request.user.sub },
+        select: { name: true, role: true },
+      });
+
+      const log = await prisma.auditLog.create({
+        data: {
+          userId: request.user.sub,
+          action: 'WAREHOUSE_ALERT_TO_SALES',
+          entity: 'Order',
+          entityId: body.orderId || null,
+          meta: {
+            ...body,
+            senderName: sender?.name || 'Warehouse Staff',
+            senderRole: sender?.role || 'WAREHOUSE',
+            resolved: false,
+          },
+        },
+        include: { user: { select: { id: true, name: true, role: true } } },
+      });
+
+      return reply.code(201).send({
+        id: log.id,
+        orderId: log.entityId,
+        orderNumber: body.orderNumber || null,
+        customerName: body.customerName || null,
+        category: body.category,
+        message: body.message,
+        urgent: body.urgent,
+        resolved: false,
+        senderName: sender?.name || 'Warehouse Staff',
+        createdAt: log.createdAt.toISOString(),
+      });
+    },
+  );
+
+  app.post(
+    '/dashboard/alerts/:id/resolve',
+    { preHandler: [app.authenticate, app.authorize('SALES', 'DIRECTOR', 'WAREHOUSE')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const log = await prisma.auditLog.findUnique({ where: { id } });
+      if (!log) throw notFound('Alert');
+
+      const meta = (log.meta as Record<string, any>) || {};
+      const updated = await prisma.auditLog.update({
+        where: { id },
+        data: {
+          meta: {
+            ...meta,
+            resolved: true,
+            resolvedAt: new Date().toISOString(),
+            resolvedById: request.user.sub,
+          },
+        },
+      });
+
+      return { id: updated.id, resolved: true };
     },
   );
 };

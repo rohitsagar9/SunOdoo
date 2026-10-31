@@ -1,37 +1,48 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   Alert,
   Badge,
   Box,
   Button,
+  Checkbox,
   Grid,
   Group,
+  Modal,
   Progress,
   ScrollArea,
+  Select,
   SimpleGrid,
   Stack,
   Table,
   Text,
+  Textarea,
+  TextInput,
   ThemeIcon,
 } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
+  BellPlus,
   Boxes,
+  Check,
   CheckCircle2,
+  MessageSquare,
   Package,
   QrCode,
   RefreshCw,
   ScanLine,
+  Send,
   Truck,
   Warehouse,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 import { formatDate, formatINR, systemLabel, titleCase } from '@/lib/format';
-import type { DashboardWarehouse } from '@/lib/types';
+import type { DashboardWarehouse, Order } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -49,10 +60,75 @@ export default function WarehousePage() {
 }
 
 function WarehouseOverview() {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['dashboard', 'warehouse'],
     queryFn: async () => (await api.get<DashboardWarehouse>('/dashboard/warehouse')).data,
   });
+
+  const [alertOpen, setAlertOpen] = useState(false);
+  const [alertForm, setAlertForm] = useState({
+    orderId: '',
+    orderNumber: '',
+    customerName: '',
+    category: 'PAYMENT_PENDING',
+    message: 'Kit is packed and verified. Customer advance payment is pending approval before dispatch release.',
+    urgent: true,
+  });
+
+  const categoryPresets: Record<string, string> = {
+    PAYMENT_PENDING:
+      'Kit is packed and verified. Customer advance payment is pending approval before dispatch release.',
+    COST_RECONCILIATION:
+      'Hardware kit was dispatched >24 hours ago. Please log the inventory procurement cost to reconcile order expenses.',
+    STOCK_SHORTAGE:
+      'Component shortage identified in warehouse for this system configuration. Restock request required.',
+    DISPATCH_READY:
+      'Kit packing and serial scanning complete. Order is ready for logistics handover and technician dispatch.',
+    GENERAL: '',
+  };
+
+  const alertMutation = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post('/dashboard/alerts', {
+          orderId: alertForm.orderId || undefined,
+          orderNumber: alertForm.orderNumber || undefined,
+          customerName: alertForm.customerName || undefined,
+          category: alertForm.category,
+          message: alertForm.message.trim(),
+          urgent: alertForm.urgent,
+        })
+      ).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'warehouse'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'sales'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'alerts'] });
+      setAlertOpen(false);
+      notifications.show({
+        title: 'Alert sent to Sales',
+        message: 'The sales desk has been notified in real time.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not send alert', message: apiError(error), color: 'red' }),
+  });
+
+  const openAlertForOrder = (order: Order) => {
+    setAlertForm({
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      customerName: order.customer.name,
+      category: order.status === 'PENDING_PAYMENT' ? 'PAYMENT_PENDING' : 'DISPATCH_READY',
+      message:
+        order.status === 'PENDING_PAYMENT'
+          ? `Kit packed for ${order.customer.name} (${order.orderNumber}). Advance payment approval required to release dispatch.`
+          : `Kit and serials ready for ${order.customer.name} (${order.orderNumber}). Awaiting dispatch handover.`,
+      urgent: order.status === 'PENDING_PAYMENT',
+    });
+    setAlertOpen(true);
+  };
 
   const data = query.data;
 
@@ -64,6 +140,24 @@ function WarehouseOverview() {
         description="Pack the kit, scan every serial and hand over a dispatch-ready order to the installation crew."
         actions={
           <>
+            <Button
+              color="orange"
+              variant="light"
+              leftSection={<BellPlus size={15} />}
+              onClick={() => {
+                setAlertForm({
+                  orderId: '',
+                  orderNumber: '',
+                  customerName: '',
+                  category: 'PAYMENT_PENDING',
+                  message: categoryPresets.PAYMENT_PENDING,
+                  urgent: true,
+                });
+                setAlertOpen(true);
+              }}
+            >
+              Alert Sales
+            </Button>
             <Button
               component={Link}
               href="/dashboard/inventory"
@@ -223,15 +317,26 @@ function WarehouseOverview() {
                             <StatusBadge status={order.status} size="xs" />
                           </Table.Td>
                           <Table.Td ta="right" style={{ whiteSpace: 'nowrap', width: '1%' }}>
-                            <Button
-                              component={Link}
-                              href={`/dashboard/orders/${order.id}`}
-                              size="compact-sm"
-                              color="sun"
-                              rightSection={<ArrowRight size={12} />}
-                            >
-                              Pack
-                            </Button>
+                            <Group gap="xs" justify="flex-end" wrap="nowrap">
+                              <Button
+                                size="compact-xs"
+                                variant="subtle"
+                                color="orange"
+                                leftSection={<BellPlus size={12} />}
+                                onClick={() => openAlertForOrder(order)}
+                              >
+                                Alert Sales
+                              </Button>
+                              <Button
+                                component={Link}
+                                href={`/dashboard/orders/${order.id}`}
+                                size="compact-sm"
+                                color="sun"
+                                rightSection={<ArrowRight size={12} />}
+                              >
+                                Pack
+                              </Button>
+                            </Group>
                           </Table.Td>
                         </Table.Tr>
                       );
@@ -320,9 +425,157 @@ function WarehouseOverview() {
                 ))}
               </Stack>
             </Panel>
+
+            {data?.warehouseAlerts && data.warehouseAlerts.length > 0 && (
+              <Panel
+                title="Alerts sent to Sales"
+                subtitle="Recent warehouse requests & nudges"
+                action={<MessageSquare size={16} color="#64748b" />}
+              >
+                <Stack gap="xs">
+                  {data.warehouseAlerts.slice(0, 5).map((alert) => (
+                    <Box
+                      key={alert.id}
+                      p="xs"
+                      style={{
+                        border: '1px solid var(--sp-border)',
+                        borderRadius: 8,
+                        background: 'var(--sp-card-subtle)',
+                      }}
+                    >
+                      <Group justify="space-between" mb={2}>
+                        <Badge size="xs" color={alert.urgent ? 'red' : 'orange'} variant="light">
+                          {alert.urgent ? 'Urgent' : titleCase(alert.category)}
+                        </Badge>
+                        <Badge size="xs" color={alert.resolved ? 'teal' : 'gray'}>
+                          {alert.resolved ? 'Resolved' : 'Pending Sales'}
+                        </Badge>
+                      </Group>
+                      {alert.orderNumber && (
+                        <Text fz="xs" fw={700}>
+                          Order {alert.orderNumber}{' '}
+                          {alert.customerName ? `· ${alert.customerName}` : ''}
+                        </Text>
+                      )}
+                      <Text fz={11} c="dimmed">
+                        {alert.message}
+                      </Text>
+                      <Text fz={9} c="dimmed" mt={2}>
+                        {formatDate(alert.createdAt)}
+                      </Text>
+                    </Box>
+                  ))}
+                </Stack>
+              </Panel>
+            )}
           </Stack>
         </Grid.Col>
       </Grid>
+
+      <Modal
+        opened={alertOpen}
+        onClose={() => setAlertOpen(false)}
+        title="Send Warehouse Alert to Sales Desk"
+        size="md"
+      >
+        <Stack gap="md">
+          <Alert color="orange" variant="light" radius="md" icon={<Send size={16} />}>
+            Warehouse alerts are surfaced immediately to the Sales and Office team on their dashboard.
+          </Alert>
+
+          {alertForm.orderNumber ? (
+            <Box
+              p="xs"
+              style={{
+                borderRadius: 6,
+                background: 'var(--sp-card-subtle)',
+                border: '1px solid var(--sp-border)',
+              }}
+            >
+              <Text fz="xs" fw={700}>
+                Linked Order: {alertForm.orderNumber}
+              </Text>
+              <Text fz={10} c="dimmed">
+                Customer: {alertForm.customerName || 'N/A'}
+              </Text>
+            </Box>
+          ) : (
+            <Select
+              label="Select order (optional)"
+              placeholder="Attach to an order"
+              searchable
+              clearable
+              data={
+                data?.queue.map((o) => ({
+                  value: o.id,
+                  label: `${o.orderNumber} · ${o.customer.name} (${o.status})`,
+                })) ?? []
+              }
+              value={alertForm.orderId || null}
+              onChange={(value) => {
+                const ord = data?.queue.find((o) => o.id === value);
+                setAlertForm((curr) => ({
+                  ...curr,
+                  orderId: value ?? '',
+                  orderNumber: ord?.orderNumber ?? '',
+                  customerName: ord?.customer.name ?? '',
+                }));
+              }}
+            />
+          )}
+
+          <Select
+            label="Alert Category"
+            required
+            data={[
+              { value: 'PAYMENT_PENDING', label: '💳 Customer Advance Payment Required' },
+              { value: 'COST_RECONCILIATION', label: '📊 Reconcile Inventory Cost (>24h overdue)' },
+              { value: 'STOCK_SHORTAGE', label: '⚠️ Component Shortage / Restock Needed' },
+              { value: 'DISPATCH_READY', label: '🚚 Kit Packed & Ready for Handover' },
+              { value: 'GENERAL', label: '💬 General Notice / Query' },
+            ]}
+            value={alertForm.category}
+            onChange={(val) => {
+              const cat = val || 'GENERAL';
+              setAlertForm((curr) => ({
+                ...curr,
+                category: cat,
+                message: categoryPresets[cat] || curr.message,
+              }));
+            }}
+          />
+
+          <Textarea
+            label="Message for Sales"
+            placeholder="Type your alert message here..."
+            required
+            minRows={3}
+            value={alertForm.message}
+            onChange={(e) => setAlertForm((curr) => ({ ...curr, message: e.target.value }))}
+          />
+
+          <Checkbox
+            label="Mark as High Priority / Urgent"
+            checked={alertForm.urgent}
+            onChange={(e) => setAlertForm((curr) => ({ ...curr, urgent: e.currentTarget.checked }))}
+          />
+
+          <Group justify="flex-end" mt="xs">
+            <Button variant="subtle" color="gray" onClick={() => setAlertOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="orange"
+              leftSection={<Send size={14} />}
+              loading={alertMutation.isPending}
+              disabled={!alertForm.message.trim()}
+              onClick={() => alertMutation.mutate()}
+            >
+              Send Alert to Sales
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 }

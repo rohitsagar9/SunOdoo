@@ -8,19 +8,24 @@ import {
   Button,
   Grid,
   Group,
+  Paper,
   Progress,
   ScrollArea,
   SimpleGrid,
   Stack,
   Table,
   Text,
+  ThemeIcon,
 } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
   BadgeIndianRupee,
+  BellRing,
   CalendarCheck,
+  Check,
   CheckCircle2,
   FileText,
   Plus,
@@ -52,9 +57,25 @@ export default function SalesDashboardPage() {
 }
 
 function SalesDashboard() {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ['dashboard', 'sales'],
     queryFn: async () => (await api.get<DashboardSales>('/dashboard/sales')).data,
+  });
+
+  const resolveAlertMutation = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/dashboard/alerts/${id}/resolve`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'sales'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard', 'warehouse'] });
+      notifications.show({
+        title: 'Alert resolved',
+        message: 'Warehouse alert marked acknowledged.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not resolve alert', message: apiError(error), color: 'red' }),
   });
 
   if (query.isLoading) return <LoadingState label="Loading the sales desk…" />;
@@ -95,6 +116,107 @@ function SalesDashboard() {
       />
 
       <InventoryCostAlertCard alerts={data.inventoryCostAlerts} />
+
+      {data.warehouseAlerts && data.warehouseAlerts.length > 0 && (
+        <Paper
+          withBorder
+          radius="md"
+          p="sm"
+          mb="md"
+          style={{
+            background: 'var(--sp-card)',
+            borderColor: 'var(--sp-border)',
+            borderLeft: '4px solid #f97316',
+          }}
+        >
+          <Group justify="space-between" align="center" mb="xs">
+            <Group gap="xs">
+              <ThemeIcon size={28} radius="md" color="orange" variant="light">
+                <BellRing size={16} />
+              </ThemeIcon>
+              <div>
+                <Group gap="xs" align="center">
+                  <Text fz="sm" fw={700} style={{ color: 'var(--sp-headings)' }}>
+                    Warehouse Alerts for Sales Desk
+                  </Text>
+                  <Badge color="orange" size="xs">
+                    {data.warehouseAlerts.length} Action{data.warehouseAlerts.length > 1 ? 's' : ''} Needed
+                  </Badge>
+                </Group>
+                <Text fz={11} c="dimmed">
+                  Nudges and dispatch updates from warehouse staff requiring sales office attention.
+                </Text>
+              </div>
+            </Group>
+          </Group>
+
+          <Stack gap="xs">
+            {data.warehouseAlerts.map((alert) => (
+              <Box
+                key={alert.id}
+                p="xs"
+                style={{
+                  borderRadius: 8,
+                  background: 'var(--sp-card-subtle)',
+                  border: '1px solid var(--sp-border)',
+                }}
+              >
+                <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+                  <div>
+                    <Group gap="xs" mb={2}>
+                      <Badge size="xs" color={alert.urgent ? 'red' : 'orange'} variant="filled">
+                        {alert.urgent ? '🚨 URGENT' : 'Warehouse Notice'}
+                      </Badge>
+                      {alert.orderNumber && (
+                        <Text
+                          component={Link}
+                          href={alert.orderId ? `/dashboard/orders/${alert.orderId}` : '#'}
+                          fz="xs"
+                          fw={700}
+                          className="sp-mono"
+                          c="sun.7"
+                        >
+                          {alert.orderNumber} {alert.customerName ? `· ${alert.customerName}` : ''}
+                        </Text>
+                      )}
+                      <Text fz={10} c="dimmed">
+                        From {alert.senderName} · {formatDateTime(alert.createdAt)}
+                      </Text>
+                    </Group>
+                    <Text fz="xs" fw={600} style={{ color: 'var(--sp-headings)' }}>
+                      {alert.message}
+                    </Text>
+                  </div>
+                  <Group gap="xs">
+                    {alert.orderId && (
+                      <Button
+                        component={Link}
+                        href={`/dashboard/orders/${alert.orderId}`}
+                        size="compact-xs"
+                        color="sun"
+                        variant="light"
+                        rightSection={<ArrowRight size={12} />}
+                      >
+                        View Order
+                      </Button>
+                    )}
+                    <Button
+                      size="compact-xs"
+                      color="teal"
+                      variant="subtle"
+                      leftSection={<Check size={12} />}
+                      loading={resolveAlertMutation.isPending}
+                      onClick={() => resolveAlertMutation.mutate(alert.id)}
+                    >
+                      Acknowledge & Resolve
+                    </Button>
+                  </Group>
+                </Group>
+              </Box>
+            ))}
+          </Stack>
+        </Paper>
+      )}
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
         <StatCard

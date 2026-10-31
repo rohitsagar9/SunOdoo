@@ -320,6 +320,20 @@ export interface RestockRequest {
   date: string;
 }
 
+export interface WarehouseAlert {
+  id: string;
+  orderId?: string | null;
+  orderNumber?: string | null;
+  customerName?: string | null;
+  category: string;
+  message: string;
+  urgent: boolean;
+  resolved: boolean;
+  senderName: string;
+  senderRole?: string;
+  createdAt: string;
+}
+
 export interface DashboardSales {
   kpis: {
     newLeadsWeek: number;
@@ -338,6 +352,7 @@ export interface DashboardSales {
   recentPayments: Payment[];
   readyForQuoteLeads?: Lead[];
   inventoryCostAlerts?: InventoryCostAlert[];
+  warehouseAlerts?: WarehouseAlert[];
 }
 
 export interface DashboardTechnician {
@@ -364,6 +379,7 @@ export interface DashboardWarehouse {
   queue: Order[];
   lowStockProducts: Product[];
   inventoryCostAlerts?: InventoryCostAlert[];
+  warehouseAlerts?: WarehouseAlert[];
 }
 
 export interface DashboardSupport {

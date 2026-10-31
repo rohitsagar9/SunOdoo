@@ -44,7 +44,10 @@ export async function buildApp() {
         env.nodeEnv !== 'production' ||
         allowedOrigins.includes(origin) ||
         origin.includes('localhost') ||
-        origin.includes('127.0.0.1')
+        origin.includes('127.0.0.1') ||
+        origin.startsWith('http://192.168.') ||
+        origin.startsWith('http://10.') ||
+        origin.startsWith('http://172.')
       ) {
         callback(null, true);
         return;
@@ -52,6 +55,9 @@ export async function buildApp() {
       callback(new Error('Origin not allowed by CORS'), false);
     },
     credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
   });
 
   await app.register(rateLimit, {

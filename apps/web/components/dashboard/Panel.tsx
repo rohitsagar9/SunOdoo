@@ -43,7 +43,7 @@ export function InlineStat({
   label,
   value,
   hint,
-  color = '#0b1f33',
+  color = 'var(--sp-headings)',
 }: {
   label: string;
   value: React.ReactNode;

@@ -97,7 +97,7 @@ export function InquiryForm() {
           </ThemeIcon>
           <div>
             <Text fw={800} fz="md">
-              Get a free rooftop quote
+              Get a free solar plan
             </Text>
             <Text fz="xs" c="dimmed">
               Your enquiry lands directly in the sales dashboard — not an inbox.

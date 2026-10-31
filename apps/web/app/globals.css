@@ -5,6 +5,7 @@
   --sp-active-menu: #EBDDFF;
   --sp-bg: #FCFAFF;
   --sp-card: #FFFFFF;
+  --sp-card-subtle: #F8F3FF;
   --sp-headings: #24143F;
   --sp-secondary: #786B8D;
   --sp-border: #EDE5F7;
@@ -26,6 +27,7 @@
   --sp-active-menu: #321B59;
   --sp-bg: #110B1E;
   --sp-card: #1B1230;
+  --sp-card-subtle: #160E28;
   --sp-headings: #F8F3FF;
   --sp-secondary: #B6A7D0;
   --sp-border: #35215A;
@@ -104,17 +106,107 @@ a {
 
 .sp-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: var(--sp-border) transparent;
 }
 
 .sp-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 .sp-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--sp-border);
   border-radius: 999px;
+}
+
+/* ERP Inputs & Form Controls */
+.mantine-TextInput-input,
+.mantine-Select-input,
+.mantine-NumberInput-input,
+.mantine-Textarea-input {
+  background-color: var(--sp-card) !important;
+  border: 1px solid var(--sp-border) !important;
+  color: var(--sp-headings) !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.mantine-TextInput-input:focus,
+.mantine-Select-input:focus,
+.mantine-NumberInput-input:focus,
+.mantine-Textarea-input:focus {
+  border-color: var(--sp-primary) !important;
+  box-shadow: 0 0 0 2px rgba(120, 60, 246, 0.2) !important;
+}
+
+.mantine-TextInput-input::placeholder,
+.mantine-Select-input::placeholder,
+.mantine-NumberInput-input::placeholder,
+.mantine-Textarea-input::placeholder {
+  color: var(--sp-secondary) !important;
+  opacity: 0.7;
+}
+
+/* ERP Data Tables */
+.mantine-Table-table {
+  color: var(--sp-headings) !important;
+}
+
+.mantine-Table-thead tr th {
+  background-color: var(--sp-sidebar) !important;
+  color: var(--sp-secondary) !important;
+  border-bottom: 1px solid var(--sp-border) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  padding: 10px 12px !important;
+}
+
+.mantine-Table-tbody tr td {
+  border-bottom: 1px solid var(--sp-border) !important;
+  padding: 11px 12px !important;
+  font-size: 13px !important;
+}
+
+.mantine-Table-tbody tr:hover {
+  background-color: var(--sp-active-menu) !important;
+}
+
+/* ERP Modals & Popovers */
+.mantine-Modal-content {
+  background-color: var(--sp-card) !important;
+  border: 1px solid var(--sp-border) !important;
+  color: var(--sp-headings) !important;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.2) !important;
+}
+
+.mantine-Modal-header {
+  background-color: var(--sp-card) !important;
+  border-bottom: 1px solid var(--sp-border) !important;
+}
+
+.mantine-Select-dropdown,
+.mantine-Menu-dropdown {
+  background-color: var(--sp-card) !important;
+  border: 1px solid var(--sp-border) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18) !important;
+  border-radius: 8px !important;
+}
+
+.mantine-Menu-item {
+  color: var(--sp-headings) !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+}
+
+.mantine-Menu-item:hover {
+  background-color: var(--sp-active-menu) !important;
+}
+
+.mantine-Paper-root {
+  color: var(--sp-headings);
 }
 
 .sp-mono {

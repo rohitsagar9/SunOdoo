@@ -197,8 +197,8 @@ export default function PublicQuotePage() {
 
   if (query.isError || !quote) {
     return (
-      <Box mih="100vh" style={{ display: 'grid', placeItems: 'center', background: '#f4f7fa', padding: 24 }}>
-        <Paper p="xl" radius="lg" withBorder maw={460}>
+      <Box mih="100vh" style={{ display: 'grid', placeItems: 'center', background: 'var(--sp-bg)', padding: 24 }}>
+        <Paper p="xl" radius="lg" withBorder maw={460} style={{ background: 'var(--sp-card)', borderColor: 'var(--sp-border)' }}>
           <Stack align="center" gap="sm">
             <ThemeIcon size={56} radius="xl" color="red" variant="light">
               <FileText size={26} />
@@ -217,7 +217,7 @@ export default function PublicQuotePage() {
   }
 
   return (
-    <Box mih="100vh" style={{ background: '#f4f7fa' }}>
+    <Box mih="100vh" style={{ background: 'var(--sp-bg)' }}>
       <Box className="sp-sun-gradient" pb={70} pt="lg">
         <Container size={1120}>
           <Group justify="space-between" align="center" wrap="wrap" gap="sm">
@@ -303,7 +303,7 @@ export default function PublicQuotePage() {
                     ['GST', `${quote.taxRate}%`],
                     ['Advance', formatINR(quote.advanceAmount, true)],
                   ].map(([label, value]) => (
-                    <Box key={label} p="sm" style={{ background: '#f8fafc', borderRadius: 10 }}>
+                    <Box key={label} p="sm" style={{ background: 'var(--sp-card-subtle)', border: '1px solid var(--sp-border)', borderRadius: 10 }}>
                       <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
                         {label}
                       </Text>

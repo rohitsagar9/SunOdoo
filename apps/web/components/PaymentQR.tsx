@@ -19,21 +19,23 @@ export function PaymentQR({
   const displayAmount = isAboveUpiLimit ? 100000 : amount;
 
   return (
-    <Paper withBorder p={compact ? 'md' : 'lg'} radius="lg" bg="white">
+    <Paper withBorder p={compact ? 'md' : 'lg'} radius="lg" style={{ background: 'var(--sp-card)', borderColor: 'var(--sp-border)' }}>
       <Stack align="center" gap="sm">
         <Group gap={6}>
-          <Smartphone size={16} color="#0f766e" />
+          <Smartphone size={16} color="var(--sp-primary)" />
           <Text fz="sm" fw={700}>
             {title}
           </Text>
         </Group>
-        <Image
-          src="/payments/upi-qr.svg"
-          alt={`UPI QR code for ${upiName}`}
-          w={compact ? 160 : 200}
-          h={compact ? 160 : 200}
-          fit="contain"
-        />
+        <div style={{ background: '#ffffff', padding: 8, borderRadius: 12, display: 'inline-flex' }}>
+          <Image
+            src="/payments/upi-qr.svg"
+            alt={`UPI QR code for ${upiName}`}
+            w={compact ? 160 : 200}
+            h={compact ? 160 : 200}
+            fit="contain"
+          />
+        </div>
         <Stack gap={2} align="center">
           <Text fw={800} fz={compact ? 'md' : 'lg'}>
             {upiName}

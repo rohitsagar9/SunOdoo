@@ -83,10 +83,10 @@ export function SignaturePad({
   }
 
   return (
-    <Paper withBorder p="sm" radius="md" bg="white">
+    <Paper withBorder p="sm" radius="md" style={{ background: 'var(--sp-card)', borderColor: 'var(--sp-border)' }}>
       <Group justify="space-between" mb={6}>
         <Group gap={6}>
-          <PenLine size={15} />
+          <PenLine size={15} color="var(--sp-primary)" />
           <Text fz="xs" fw={600}>
             Customer signature
           </Text>

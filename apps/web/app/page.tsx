@@ -260,7 +260,7 @@ export default function LandingPage() {
           </div>
 
           <div id="quote" className={classes.inquiryCard}>
-            <Paper p="xl" radius="xl" shadow="xl" bg="white">
+            <Paper p="xl" radius="xl" shadow="xl" style={{ background: 'var(--sp-card)', border: '1px solid var(--sp-border)' }}>
               <InquiryForm />
             </Paper>
             <Group gap={8} mt="md" justify="center" className={classes.inquiryNote}>

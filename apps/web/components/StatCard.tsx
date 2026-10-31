@@ -17,7 +17,16 @@ export function StatCard({
   tone?: 'light' | 'filled';
 }) {
   return (
-    <Paper p="lg" className="sp-soft-card sp-hover-lift" h="100%">
+    <Paper
+      p="lg"
+      className="sp-soft-card sp-hover-lift"
+      h="100%"
+      style={{
+        background: 'var(--sp-card)',
+        border: '1px solid var(--sp-border)',
+        borderRadius: 12,
+      }}
+    >
       <Group justify="space-between" align="flex-start" mb="md" wrap="nowrap">
         <Text fz={11} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
           {label}
@@ -31,7 +40,7 @@ export function StatCard({
           <Icon size={19} strokeWidth={2} />
         </ThemeIcon>
       </Group>
-      <Text fz={28} fw={800} lh={1.05} style={{ letterSpacing: '-0.03em' }}>
+      <Text fz={28} fw={800} lh={1.05} style={{ letterSpacing: '-0.03em', color: 'var(--sp-headings)' }}>
         {value}
       </Text>
       {hint && (

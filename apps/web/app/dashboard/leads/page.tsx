@@ -302,9 +302,9 @@ function LeadsKanban() {
                       <Box
                         p="md"
                         style={{
-                          border: '1px dashed #dbe3ec',
+                          border: '1px dashed var(--sp-border)',
                           borderRadius: 12,
-                          background: 'rgba(255,255,255,.5)',
+                          background: 'var(--sp-card-subtle)',
                         }}
                       >
                         <Text fz="xs" c="dimmed" ta="center">
@@ -341,7 +341,7 @@ function LeadCard({
     <Box
       p="md"
       className="sp-soft-card sp-hover-lift"
-      style={{ cursor: 'pointer', borderLeft: '3px solid #f5a800' }}
+      style={{ cursor: 'pointer', borderLeft: '3px solid var(--sp-primary)' }}
       onClick={onOpen}
     >
       <Group justify="space-between" align="flex-start" wrap="nowrap" mb={6}>

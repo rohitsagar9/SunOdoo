@@ -243,8 +243,8 @@ function BarcodeLibrary() {
                       <Box
                         p={8}
                         style={{
-                          background: '#fff',
-                          border: '1px dashed #e2e8f0',
+                          background: '#ffffff',
+                          border: '1px dashed var(--sp-border)',
                           borderRadius: 8,
                           display: 'flex',
                           justifyContent: 'center',

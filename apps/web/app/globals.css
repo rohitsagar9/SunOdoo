@@ -79,6 +79,26 @@ a {
   backdrop-filter: blur(12px);
 }
 
+.sunodoo-brand-title {
+  color: var(--sp-headings, #24143f);
+  transition: color 0.15s ease;
+}
+
+.sunodoo-brand-sub {
+  color: var(--sp-secondary, #64748b);
+  transition: color 0.15s ease;
+}
+
+[data-mantine-color-scheme="dark"] .sunodoo-brand-title,
+.dark .sunodoo-brand-title {
+  color: #FFFFFF !important;
+}
+
+[data-mantine-color-scheme="dark"] .sunodoo-brand-sub,
+.dark .sunodoo-brand-sub {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
 .sp-soft-card {
   background: var(--sp-card);
   border: 1px solid var(--sp-border);

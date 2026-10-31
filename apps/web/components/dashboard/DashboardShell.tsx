@@ -351,7 +351,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <SunMedium size={18} />
             </ThemeIcon>
             <div>
-              <Text fz={11} fw={700}>
+              <Text className="sunodoo-brand-title" fz={11} fw={700}>
                 SunOdoo
               </Text>
               <Text fz={10} c="dimmed">

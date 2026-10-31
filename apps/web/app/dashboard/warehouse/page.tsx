@@ -37,6 +37,7 @@ import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, LoadingState } from '@/components/States';
 import { Panel } from '@/components/dashboard/Panel';
+import { InventoryCostAlertCard } from '@/components/dashboard/InventoryCostAlertCard';
 import { RoleGate } from '@/components/dashboard/RoleGate';
 
 export default function WarehousePage() {
@@ -100,50 +101,7 @@ function WarehouseOverview() {
         </Alert>
       )}
 
-      {data?.inventoryCostAlerts && data.inventoryCostAlerts.length > 0 && (
-        <Alert
-          color="red"
-          variant="light"
-          radius="md"
-          mb="md"
-          title="⚠️ Inventory Cost Reconciliation Overdue (>24 hrs)"
-          icon={<AlertTriangle size={18} />}
-        >
-          <Text size="sm" mb="xs">
-            Hardware kit dispatched over 24 hours ago, but procurement inventory cost has not yet been recorded.
-            Sales and Warehouse must reconcile inventory cost:
-          </Text>
-          <Stack gap="xs">
-            {data.inventoryCostAlerts.map((alert) => (
-              <Group
-                key={alert.orderId}
-                justify="space-between"
-                bg="white"
-                p="xs"
-                style={{ borderRadius: 6, border: '1px solid #fecaca' }}
-              >
-                <div>
-                  <Text size="xs" fw={700}>
-                    Order {alert.orderNumber} · {alert.customerName}
-                  </Text>
-                  <Text fz={10} c="dimmed">
-                    Dispatched {alert.hoursSinceDispatch} hours ago · Total: {formatINR(alert.totalAmount, true)}
-                  </Text>
-                </div>
-                <Button
-                  component={Link}
-                  href={`/dashboard/orders/${alert.orderId}`}
-                  size="compact-xs"
-                  color="red"
-                  variant="light"
-                >
-                  View Order
-                </Button>
-              </Group>
-            ))}
-          </Stack>
-        </Alert>
-      )}
+      <InventoryCostAlertCard alerts={data?.inventoryCostAlerts} />
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
         <StatCard

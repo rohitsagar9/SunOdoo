@@ -14,6 +14,8 @@ const chrome = spawn(
   CHROME,
   [
     '--headless=new',
+    '--no-sandbox',
+    '--disable-dev-shm-usage',
     `--remote-debugging-port=${PORT}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',

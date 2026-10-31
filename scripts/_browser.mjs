@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const CHROME =
+  process.env.CHROME_PATH ||
+  (process.platform === 'win32'
+    ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+    : '/usr/bin/google-chrome');
 const PORT = 9333;
 const userDataDir = path.join(os.tmpdir(), `sunpower-chrome-${Date.now()}`);
 const chrome = spawn(

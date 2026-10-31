@@ -169,7 +169,7 @@ function OrdersList() {
         {orders.length > 0 && (
           <Panel padding={0}>
             <ScrollArea>
-              <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" miw={1000}>
+              <Table highlightOnHover verticalSpacing="xs" horizontalSpacing="xs" miw={760}>
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Order</Table.Th>
@@ -180,7 +180,7 @@ function OrdersList() {
                     <Table.Th>Packing / scans</Table.Th>
                     <Table.Th>Status</Table.Th>
                     <Table.Th>Created</Table.Th>
-                    <Table.Th ta="right" />
+                    <Table.Th ta="right" style={{ whiteSpace: 'nowrap', width: '1%' }} />
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
@@ -249,7 +249,7 @@ function OrdersList() {
                             {formatDate(order.createdAt)}
                           </Text>
                         </Table.Td>
-                        <Table.Td ta="right">
+                        <Table.Td ta="right" style={{ whiteSpace: 'nowrap', width: '1%' }}>
                           <Button
                             component={Link}
                             href={`/dashboard/orders/${order.id}`}

@@ -10,6 +10,7 @@ import {
   Button,
   Checkbox,
   Divider,
+  FileInput,
   Grid,
   Group,
   Paper,
@@ -36,6 +37,7 @@ import {
   ScanLine,
   ShieldCheck,
   Truck,
+  UploadCloud,
   UserRound,
   Wallet,
   Wrench,
@@ -63,6 +65,8 @@ function OrderDetail() {
   const id = params?.id;
   const queryClient = useQueryClient();
   const [serial, setSerial] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const query = useQuery({
     queryKey: ['order', id],
@@ -160,6 +164,52 @@ function OrderDetail() {
   const scansReady = scanRows.every((row) => row.done);
   const readyToDispatch = packed === kitItems.length && scansReady && kitItems.length > 0;
   const dispatched = ['DISPATCHED', 'INSTALLED', 'COMPLETED'].includes(order.status);
+
+  const handleDocUpload = async (file: File | null) => {
+    if (!file) return;
+    setDocFile(file);
+    setUploadingDoc(true);
+    try {
+      const unscannedRow = scanRows.find((r) => !r.done);
+      if (!unscannedRow) {
+        notifications.show({
+          title: 'All serials already scanned',
+          message: 'Every required item on this order already has its serial assigned.',
+          color: 'blue',
+        });
+        setUploadingDoc(false);
+        return;
+      }
+      const res = await api.get<{ units: Array<{ serialNumber: string }> }>('/inventory', {
+        params: { status: 'IN_STOCK', productId: unscannedRow.item.productId },
+      });
+      const inStockUnits = res.data?.units ?? [];
+      if (inStockUnits.length === 0) {
+        notifications.show({
+          title: 'No in-stock serials found',
+          message: `Stock count for ${unscannedRow.item.product.name} is 0. Receive stock in Inventory first.`,
+          color: 'orange',
+        });
+      } else {
+        const candidate = inStockUnits[0];
+        await scanMutation.mutateAsync(candidate.serialNumber);
+        notifications.show({
+          title: 'Document barcode processed',
+          message: `Auto-scanned ${candidate.serialNumber} from ${file.name}. Stock count reduced.`,
+          color: 'teal',
+        });
+      }
+    } catch (err) {
+      notifications.show({
+        title: 'Document scan failed',
+        message: apiError(err),
+        color: 'red',
+      });
+    } finally {
+      setUploadingDoc(false);
+      setDocFile(null);
+    }
+  };
 
   return (
     <>
@@ -377,6 +427,23 @@ function OrderDetail() {
                   Scan
                 </Button>
               </Group>
+
+              <Paper withBorder p="sm" radius="md" mb="md" bg="var(--sp-card-bg, #fbfcfe)">
+                <Text fz="xs" fw={700} mb={4}>
+                  Auto-scan serial via document or photo (PDF / JPG / PNG)
+                </Text>
+                <Text fz={11} c="dimmed" mb="xs">
+                  Upload delivery challan or carton barcode snapshot. The system registers the serial and decreases available inventory count.
+                </Text>
+                <FileInput
+                  placeholder="Upload barcode photo or challan PDF"
+                  accept="image/png,image/jpeg,image/webp,application/pdf"
+                  value={docFile}
+                  onChange={handleDocUpload}
+                  disabled={dispatched || uploadingDoc}
+                  leftSection={<UploadCloud size={15} />}
+                />
+              </Paper>
 
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm" mb="md">
                 {scanRows.map((row) => (

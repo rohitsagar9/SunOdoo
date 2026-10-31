@@ -149,7 +149,7 @@ function WarehouseOverview() {
               />
             ) : (
               <ScrollArea>
-                <Table verticalSpacing="md" horizontalSpacing="md" highlightOnHover miw={880}>
+                <Table verticalSpacing="sm" horizontalSpacing="xs" highlightOnHover miw={720}>
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>Order</Table.Th>
@@ -158,7 +158,7 @@ function WarehouseOverview() {
                       <Table.Th>Packing</Table.Th>
                       <Table.Th>Serial scans</Table.Th>
                       <Table.Th>Status</Table.Th>
-                      <Table.Th ta="right" />
+                      <Table.Th ta="right" style={{ whiteSpace: 'nowrap', width: '1%' }} />
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
@@ -219,7 +219,7 @@ function WarehouseOverview() {
                           <Table.Td>
                             <StatusBadge status={order.status} size="xs" />
                           </Table.Td>
-                          <Table.Td ta="right">
+                          <Table.Td ta="right" style={{ whiteSpace: 'nowrap', width: '1%' }}>
                             <Button
                               component={Link}
                               href={`/dashboard/orders/${order.id}`}

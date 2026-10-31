@@ -352,10 +352,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             </ThemeIcon>
             <div>
               <Text fz={11} fw={700}>
-                SunPower Solutions
+                SunOdoo
               </Text>
               <Text fz={10} c="dimmed">
-                Solar operations platform
+                Solar ERP Platform
               </Text>
             </div>
           </Group>

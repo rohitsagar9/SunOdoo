@@ -215,28 +215,62 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(422, 'Choose a valid technician', 'INVALID_TECHNICIAN');
       }
 
-      // Check if the technician already has an active job in the requested slot on that date
+      // Check if technician has overlapping jobs on this date with custom timing guidance
       if (body.slot) {
         const targetDate = new Date(body.scheduledAt);
         const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
         const dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
 
-        const slotConflict = await prisma.job.findFirst({
+        const existingJobs = await prisma.job.findMany({
           where: {
             technicianId: body.technicianId,
             scheduledDate: { gte: dayStart, lte: dayEnd },
-            scheduledSlot: body.slot,
             status: { notIn: ['CANCELLED', 'COMPLETED'] },
             leadId: { not: id },
           },
         });
 
-        if (slotConflict) {
-          throw new AppError(
-            409,
-            `Technician ${technician.name} is already occupied for the slot "${body.slot}" on this date. Please select another slot or technician.`,
-            'SLOT_OCCUPIED',
-          );
+        const toMins = (t: string) => {
+          const parts = t.trim().split(':').map(Number);
+          return (parts[0] || 0) * 60 + (parts[1] || 0);
+        };
+
+        const parseRange = (slotStr?: string | null) => {
+          if (!slotStr) return null;
+          const parts = slotStr.split('-');
+          if (parts.length >= 2) {
+            return {
+              start: toMins(parts[0]),
+              end: toMins(parts[1]),
+              rawStart: parts[0].trim(),
+              rawEnd: parts[1].trim(),
+            };
+          }
+          return null;
+        };
+
+        const newRange = parseRange(body.slot);
+        if (newRange) {
+          for (const job of existingJobs) {
+            const exRange = parseRange(job.scheduledSlot);
+            if (exRange) {
+              const overlap = newRange.start < exRange.end && newRange.end > exRange.start;
+              if (overlap) {
+                throw new AppError(
+                  409,
+                  `Technician ${technician.name} is already allocated on ${job.jobNumber} from ${exRange.rawStart} to ${exRange.rawEnd}. Please choose a timing before ${exRange.rawStart} or after ${exRange.rawEnd}.`,
+                  'SLOT_OCCUPIED',
+                  { conflictJob: job.jobNumber, before: exRange.rawStart, after: exRange.rawEnd },
+                );
+              }
+            } else if (job.scheduledSlot === body.slot) {
+              throw new AppError(
+                409,
+                `Technician ${technician.name} is already occupied for "${body.slot}" on this date. Please choose another time.`,
+                'SLOT_OCCUPIED',
+              );
+            }
+          }
         }
       }
 

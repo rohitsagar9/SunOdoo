@@ -31,7 +31,7 @@ export function Logo({
             c={light ? 'white' : 'ink.9'}
             style={{ letterSpacing: '-0.02em' }}
           >
-            SunPower
+            SunOdoo
           </Text>
           {!compact && (
             <Text
@@ -40,7 +40,7 @@ export function Logo({
               tt="uppercase"
               style={{ letterSpacing: '0.18em', color: light ? 'rgba(255,255,255,.55)' : '#64748b' }}
             >
-              Solar operations
+              Solar ERP
             </Text>
           )}
         </div>

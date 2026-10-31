@@ -42,6 +42,7 @@ import {
   Package,
   PenLine,
   Phone,
+  ShieldAlert,
   ShieldCheck,
   Signature,
   SunMedium,
@@ -316,6 +317,7 @@ function JobDetail() {
   const signatureReady = Boolean(job.signature);
   const photosReady = photos.length > 0;
   const canComplete = isSurvey ? true : !isInstallation || (signatureReady && photosReady);
+  const isAdvancePending = isInstallation && Boolean(order && order.status === 'PENDING_PAYMENT');
 
   return (
     <>
@@ -359,6 +361,8 @@ function JobDetail() {
               color="sun"
               leftSection={<LogIn size={15} />}
               loading={clockInMutation.isPending}
+              disabled={isAdvancePending}
+              title={isAdvancePending ? 'Advance payment must be received before starting work' : undefined}
               onClick={() => clockInMutation.mutate()}
             >
               Clock in
@@ -376,6 +380,20 @@ function JobDetail() {
           )}
         </Group>
       </Group>
+
+      {isAdvancePending && (
+        <Alert
+          color="orange"
+          variant="light"
+          radius="md"
+          mb="md"
+          title="Work Locked · Advance Payment Pending"
+          icon={<ShieldAlert size={18} />}
+        >
+          Technicians can only start installation work after the customer advance payment is confirmed.
+          Warehouse kit dispatch and installation clock-in remain locked until payment is approved.
+        </Alert>
+      )}
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
         <Paper p="md" className="sp-soft-card">

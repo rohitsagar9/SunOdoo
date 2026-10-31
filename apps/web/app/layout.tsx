@@ -8,12 +8,12 @@ import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
   title: {
-    default: 'SunPower Solutions · Solar operations platform',
-    template: '%s · SunPower Solutions',
+    default: 'SunOdoo · Solar ERP platform',
+    template: '%s · SunOdoo',
   },
   description:
-    'One platform for solar enquiries, surveys, quotes, payments, warehouse dispatch, installation sign-off and warranty support.',
-  applicationName: 'SunPower Solutions',
+    'One ERP platform for solar enquiries, surveys, quotes, advance payments, warehouse dispatch, technician work and warranty support.',
+  applicationName: 'SunOdoo Solar ERP',
 };
 
 export const viewport: Viewport = {

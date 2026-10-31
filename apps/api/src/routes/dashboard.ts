@@ -296,6 +296,37 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         }),
       ]);
 
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const ordersDispatchedOver24h = await prisma.order.findMany({
+        where: {
+          dispatchAt: { lte: twentyFourHoursAgo },
+          status: { in: ['DISPATCHED', 'INSTALLED', 'COMPLETED'] },
+        },
+        include: {
+          customer: true,
+          job: { include: { expenses: true } },
+        },
+        take: 10,
+      });
+
+      const inventoryCostAlerts = ordersDispatchedOver24h
+        .filter((ord) => {
+          const hasCost = ord.job?.expenses?.some((e) =>
+            ['HARDWARE', 'INVENTORY', 'MATERIALS'].includes(e.category.toUpperCase()),
+          );
+          return !hasCost;
+        })
+        .map((ord) => ({
+          orderId: ord.id,
+          orderNumber: ord.orderNumber,
+          customerName: ord.customer.name,
+          dispatchAt: ord.dispatchAt!.toISOString(),
+          hoursSinceDispatch: Math.round(
+            (Date.now() - new Date(ord.dispatchAt!).getTime()) / (3600 * 1000),
+          ),
+          totalAmount: ord.total,
+        }));
+
       return {
         kpis: {
           newLeadsWeek: newLeads,
@@ -320,6 +351,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         recentLeads,
         recentPayments,
         readyForQuoteLeads: readyForQuoteLeads ?? [],
+        inventoryCostAlerts,
       };
     },
   );
@@ -429,6 +461,37 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         },
       });
 
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const ordersDispatchedOver24h = await prisma.order.findMany({
+        where: {
+          dispatchAt: { lte: twentyFourHoursAgo },
+          status: { in: ['DISPATCHED', 'INSTALLED', 'COMPLETED'] },
+        },
+        include: {
+          customer: true,
+          job: { include: { expenses: true } },
+        },
+        take: 10,
+      });
+
+      const inventoryCostAlerts = ordersDispatchedOver24h
+        .filter((ord) => {
+          const hasCost = ord.job?.expenses?.some((e) =>
+            ['HARDWARE', 'INVENTORY', 'MATERIALS'].includes(e.category.toUpperCase()),
+          );
+          return !hasCost;
+        })
+        .map((ord) => ({
+          orderId: ord.id,
+          orderNumber: ord.orderNumber,
+          customerName: ord.customer.name,
+          dispatchAt: ord.dispatchAt!.toISOString(),
+          hoursSinceDispatch: Math.round(
+            (Date.now() - new Date(ord.dispatchAt!).getTime()) / (3600 * 1000),
+          ),
+          totalAmount: ord.total,
+        }));
+
       return {
         kpis: {
           readyToPack: queue.filter((order) => order.status === 'ADVANCE_PAID').length,
@@ -458,6 +521,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           };
         }),
         lowStockProducts,
+        inventoryCostAlerts,
       };
     },
   );

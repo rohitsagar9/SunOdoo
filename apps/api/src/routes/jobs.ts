@@ -122,6 +122,14 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(409, 'This job is already closed', 'JOB_CLOSED');
       }
 
+      if (job.type === 'INSTALLATION' && job.order && job.order.status === 'PENDING_PAYMENT') {
+        throw new AppError(
+          409,
+          'Customer advance payment is pending. Technicians can only clock in and start installation work after payment has been received and approved by the office.',
+          'PAYMENT_REQUIRED',
+        );
+      }
+
       const open = job.timeLogs.find((log) => !log.clockOut);
       if (open) return { job, timeLog: open, alreadyClockedIn: true };
 
@@ -149,6 +157,14 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       const job = await getJob(id);
+      if (job.type === 'INSTALLATION' && job.order && job.order.status === 'PENDING_PAYMENT') {
+        throw new AppError(
+          409,
+          'Customer advance payment is pending. Technicians can only clock in and start installation work after payment has been received and approved by the office.',
+          'PAYMENT_REQUIRED',
+        );
+      }
+
       const open = job.timeLogs.find((log) => !log.clockOut);
       if (!open) throw new AppError(409, 'Clock in before clocking out', 'NOT_CLOCKED_IN');
 

@@ -298,6 +298,28 @@ export interface Ticket {
   _count?: { updates: number };
 }
 
+export interface InventoryCostAlert {
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  dispatchAt: string;
+  hoursSinceDispatch: number;
+  totalAmount: number;
+}
+
+export interface RestockRequest {
+  id: string;
+  productId?: string | null;
+  quantity: number;
+  unitCost: number;
+  totalCost: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  description: string;
+  requestedBy: string;
+  createdAt: string;
+  date: string;
+}
+
 export interface DashboardSales {
   kpis: {
     newLeadsWeek: number;
@@ -315,6 +337,7 @@ export interface DashboardSales {
   recentLeads: Lead[];
   recentPayments: Payment[];
   readyForQuoteLeads?: Lead[];
+  inventoryCostAlerts?: InventoryCostAlert[];
 }
 
 export interface DashboardTechnician {
@@ -340,6 +363,7 @@ export interface DashboardWarehouse {
   };
   queue: Order[];
   lowStockProducts: Product[];
+  inventoryCostAlerts?: InventoryCostAlert[];
 }
 
 export interface DashboardSupport {

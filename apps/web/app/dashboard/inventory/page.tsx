@@ -28,19 +28,23 @@ import {
   AlertTriangle,
   Barcode,
   Boxes,
+  Check,
   CheckCircle2,
+  Clock,
   PackagePlus,
   RefreshCw,
   ScanLine,
   Search,
+  Send,
   ShieldCheck,
   UploadCloud,
   Warehouse,
+  X,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatINR, safeValue, titleCase } from '@/lib/format';
+import { formatDate, formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
-import type { InventorySummaryRow, InventoryUnit } from '@/lib/types';
+import type { InventorySummaryRow, InventoryUnit, RestockRequest } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -67,6 +71,13 @@ function InventoryWorkspace() {
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
   const [receiveOpen, setReceiveOpen] = useState(false);
+  const [restockOpen, setRestockOpen] = useState(false);
+  const [restockForm, setRestockForm] = useState({
+    productId: '',
+    quantity: 5 as number | string,
+    unitCost: 0 as number | string,
+    notes: '',
+  });
   const [form, setForm] = useState({
     productId: '',
     quantity: 1 as number | string,
@@ -189,7 +200,67 @@ function InventoryWorkspace() {
       notifications.show({ title: 'Could not update unit', message: apiError(error), color: 'red' }),
   });
 
+  const restockRequestsQuery = useQuery({
+    queryKey: ['inventory', 'restock-requests'],
+    queryFn: async () => (await api.get<RestockRequest[]>('/inventory/restock-requests')).data,
+  });
+  const restockRequests = restockRequestsQuery.data ?? [];
+
+  const createRestockMutation = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post('/inventory/restock-requests', {
+          productId: restockForm.productId,
+          quantity: Number(restockForm.quantity) || 1,
+          unitCost: Number(restockForm.unitCost) || 1,
+          notes: restockForm.notes || undefined,
+        })
+      ).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      setRestockOpen(false);
+      setRestockForm({ productId: '', quantity: 5, unitCost: 0, notes: '' });
+      notifications.show({
+        title: 'Restock request submitted',
+        message: 'The request has been routed to the Director for price & expense approval.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not submit restock request', message: apiError(error), color: 'red' }),
+  });
+
+  const approveRestockMutation = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/inventory/restock-requests/${id}/approve`)).data,
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      notifications.show({
+        title: 'Restock approved',
+        message: `${res.quantityAdded} units generated in stock · ${formatINR(res.amountDeducted)} deducted from company funds.`,
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Approval failed', message: apiError(error), color: 'red' }),
+  });
+
+  const rejectRestockMutation = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/inventory/restock-requests/${id}/reject`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      notifications.show({
+        title: 'Restock rejected',
+        message: 'The restock request was rejected.',
+        color: 'gray',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Rejection failed', message: apiError(error), color: 'red' }),
+  });
+
   const selectedProduct = summary.find((row) => row.product.id === form.productId);
+  const selectedRestockProduct = summary.find((row) => row.product.id === restockForm.productId);
 
   return (
     <>
@@ -200,13 +271,23 @@ function InventoryWorkspace() {
         actions={
           <>
             {canManage && (
-              <Button
-                color="sun"
-                leftSection={<PackagePlus size={15} />}
-                onClick={() => setReceiveOpen(true)}
-              >
-                Receive stock
-              </Button>
+              <>
+                <Button
+                  color="sun"
+                  leftSection={<PackagePlus size={15} />}
+                  onClick={() => setReceiveOpen(true)}
+                >
+                  Receive stock
+                </Button>
+                <Button
+                  variant="light"
+                  color="orange"
+                  leftSection={<Send size={15} />}
+                  onClick={() => setRestockOpen(true)}
+                >
+                  Request restock
+                </Button>
+              </>
             )}
             <Button
               variant="light"
@@ -301,6 +382,16 @@ function InventoryWorkspace() {
           <Tabs.Tab value="summary">Stock summary</Tabs.Tab>
           <Tabs.Tab value="serials">
             Serial register <Badge size="xs" ml={6}>{units.length}</Badge>
+          </Tabs.Tab>
+          <Tabs.Tab value="restock">
+            Restock requests{' '}
+            <Badge
+              size="xs"
+              ml={6}
+              color={restockRequests.filter((r) => r.status === 'PENDING').length > 0 ? 'orange' : 'gray'}
+            >
+              {restockRequests.length}
+            </Badge>
           </Tabs.Tab>
         </Tabs.List>
 
@@ -535,6 +626,126 @@ function InventoryWorkspace() {
             )}
           </Panel>
         </Tabs.Panel>
+
+        <Tabs.Panel value="restock">
+          <Panel
+            title="Restock requests & Director approvals"
+            subtitle="Warehouse submits stock requests; Director approves and company funds are deducted"
+            action={<Boxes size={16} color="#64748b" />}
+            padding={0}
+          >
+            {restockRequestsQuery.isLoading ? (
+              <LoadingState label="Loading restock requests…" />
+            ) : restockRequests.length === 0 ? (
+              <EmptyState
+                title="No restock requests"
+                description="Click 'Request restock' above when materials are low to send a procurement request to the Director."
+              />
+            ) : (
+              <ScrollArea>
+                <Table verticalSpacing="sm" horizontalSpacing="md" highlightOnHover miw={800}>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Date</Table.Th>
+                      <Table.Th>Item & Details</Table.Th>
+                      <Table.Th>Quantity</Table.Th>
+                      <Table.Th>Unit cost</Table.Th>
+                      <Table.Th>Total cost</Table.Th>
+                      <Table.Th>Requested by</Table.Th>
+                      <Table.Th>Status</Table.Th>
+                      {user?.role === 'DIRECTOR' && <Table.Th ta="right">Director action</Table.Th>}
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {restockRequests.map((req) => (
+                      <Table.Tr key={req.id}>
+                        <Table.Td>
+                          <Text fz="xs" fw={600}>
+                            {formatDate(req.createdAt)}
+                          </Text>
+                          <Text fz={10} c="dimmed">
+                            {formatDateTime(req.createdAt).split(' ')[1] || ''}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text fz="sm" fw={600}>
+                            {req.description}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge variant="light" color="indigo">
+                            {req.quantity} units
+                          </Badge>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text fz="xs" className="sp-mono">
+                            {formatINR(req.unitCost)}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text
+                            fz="sm"
+                            fw={700}
+                            className="sp-mono"
+                            c={req.status === 'APPROVED' ? 'red.7' : 'sun.7'}
+                          >
+                            {formatINR(req.totalCost)}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text fz="xs" c="dimmed">
+                            {req.requestedBy}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Badge
+                            size="xs"
+                            color={
+                              req.status === 'APPROVED' ? 'teal' : req.status === 'REJECTED' ? 'red' : 'orange'
+                            }
+                          >
+                            {req.status}
+                          </Badge>
+                        </Table.Td>
+                        {user?.role === 'DIRECTOR' && (
+                          <Table.Td ta="right">
+                            {req.status === 'PENDING' ? (
+                              <Group gap="xs" justify="flex-end">
+                                <Button
+                                  size="compact-xs"
+                                  color="teal"
+                                  leftSection={<Check size={12} />}
+                                  loading={approveRestockMutation.isPending}
+                                  onClick={() => approveRestockMutation.mutate(req.id)}
+                                >
+                                  Approve & Deduct
+                                </Button>
+                                <Button
+                                  size="compact-xs"
+                                  color="red"
+                                  variant="light"
+                                  leftSection={<X size={12} />}
+                                  loading={rejectRestockMutation.isPending}
+                                  onClick={() => rejectRestockMutation.mutate(req.id)}
+                                >
+                                  Reject
+                                </Button>
+                              </Group>
+                            ) : (
+                              <Text fz="xs" c="dimmed">
+                                Processed
+                              </Text>
+                            )}
+                          </Table.Td>
+                        )}
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </ScrollArea>
+            )}
+          </Panel>
+        </Tabs.Panel>
       </Tabs>
 
       <Modal opened={receiveOpen} onClose={() => setReceiveOpen(false)} title="Receive stock" size="lg">
@@ -599,6 +810,101 @@ function InventoryWorkspace() {
               onClick={() => receiveMutation.mutate()}
             >
               Receive {Number(form.quantity) || 1} unit(s)
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={restockOpen}
+        onClose={() => setRestockOpen(false)}
+        title="Request stock replenishment (routed to Director)"
+        size="lg"
+      >
+        <Stack gap="md">
+          <Alert color="orange" variant="light" radius="md" icon={<Send size={16} />}>
+            Warehouse requests go directly to the Director. If approved, the inventory procurement cost
+            will be deducted from company finances and physical stock units will be created automatically.
+          </Alert>
+          <Select
+            label="Product to restock"
+            placeholder="Select a product"
+            required
+            searchable
+            data={summary.map((row) => ({
+              value: row.product.id,
+              label: `${row.product.name} (${row.product.sku}) · In stock: ${row.inStock}`,
+            }))}
+            value={restockForm.productId || null}
+            onChange={(value) => {
+              const prod = summary.find((r) => r.product.id === value)?.product;
+              setRestockForm((current) => ({
+                ...current,
+                productId: value ?? '',
+                unitCost: prod ? prod.costPrice || Math.round(prod.unitPrice * 0.7) : current.unitCost,
+              }));
+            }}
+          />
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <NumberInput
+              label="Quantity to order"
+              min={1}
+              max={500}
+              required
+              value={restockForm.quantity}
+              onChange={(value) => setRestockForm((current) => ({ ...current, quantity: value }))}
+            />
+            <NumberInput
+              label="Unit procurement cost (₹)"
+              min={1}
+              required
+              value={restockForm.unitCost}
+              onChange={(value) => setRestockForm((current) => ({ ...current, unitCost: value }))}
+            />
+          </SimpleGrid>
+          <TextInput
+            label="Procurement notes"
+            placeholder="e.g. Supplier lead time 3 days, low buffer stock"
+            value={restockForm.notes}
+            onChange={(event) =>
+              setRestockForm((current) => ({ ...current, notes: safeValue(event) }))
+            }
+          />
+          {selectedRestockProduct && (
+            <Paper p="sm" bg="sun.0" radius="md">
+              <Group justify="space-between">
+                <div>
+                  <Text fz="xs" fw={700} c="sun.9">
+                    Estimated total cost to deduct
+                  </Text>
+                  <Text fz={10} c="dimmed">
+                    {restockForm.quantity} × {formatINR(Number(restockForm.unitCost) || 0)}
+                  </Text>
+                </div>
+                <Text fz="lg" fw={800} className="sp-mono" c="sun.9">
+                  {formatINR(
+                    (Number(restockForm.quantity) || 0) * (Number(restockForm.unitCost) || 0),
+                  )}
+                </Text>
+              </Group>
+            </Paper>
+          )}
+          <Group justify="flex-end">
+            <Button variant="subtle" color="gray" onClick={() => setRestockOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="sun"
+              leftSection={<Send size={15} />}
+              disabled={
+                !restockForm.productId ||
+                !Number(restockForm.quantity) ||
+                !Number(restockForm.unitCost)
+              }
+              loading={createRestockMutation.isPending}
+              onClick={() => createRestockMutation.mutate()}
+            >
+              Send request to Director
             </Button>
           </Group>
         </Stack>

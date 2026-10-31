@@ -169,4 +169,164 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
       return updated;
     },
   );
+
+  app.get(
+    '/inventory/restock-requests',
+    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR')] },
+    async () => {
+      const records = await prisma.expense.findMany({
+        where: {
+          category: { in: ['RESTOCK_PENDING', 'RESTOCK_APPROVED', 'RESTOCK_REJECTED'] },
+        },
+        include: { createdBy: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return records.map((rec) => {
+        // Parse metadata from description: [RESTOCK:productId:quantity:unitCost]
+        const match = rec.description.match(/\[RESTOCK:([^:]+):(\d+):(\d+)\]/);
+        return {
+          id: rec.id,
+          productId: match ? match[1] : null,
+          quantity: match ? Number(match[2]) : 1,
+          unitCost: match ? Number(match[3]) : rec.amount,
+          totalCost: rec.amount,
+          status: rec.category.replace('RESTOCK_', ''),
+          description: rec.description.replace(/\[RESTOCK:[^\]]+\]\s*/, ''),
+          requestedBy: rec.createdBy?.name ?? 'Warehouse Staff',
+          createdAt: rec.createdAt,
+          date: rec.date,
+        };
+      });
+    },
+  );
+
+  app.post(
+    '/inventory/restock-requests',
+    { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR')] },
+    async (request, reply) => {
+      const body = z
+        .object({
+          productId: z.string().min(1),
+          quantity: z.coerce.number().int().min(1).max(500),
+          unitCost: z.coerce.number().int().min(1),
+          notes: z.string().max(300).optional(),
+        })
+        .parse(request.body);
+
+      const product = await prisma.product.findUnique({ where: { id: body.productId } });
+      if (!product) throw notFound('Product');
+
+      const totalCost = body.quantity * body.unitCost;
+      const metaTag = `[RESTOCK:${product.id}:${body.quantity}:${body.unitCost}]`;
+      const description = `${metaTag} Restock ${body.quantity}x ${product.name} (${product.sku}) @ ₹${body.unitCost}/unit. Notes: ${body.notes || 'Warehouse low stock'}`;
+
+      const expense = await prisma.expense.create({
+        data: {
+          category: 'RESTOCK_PENDING',
+          description,
+          amount: totalCost,
+          createdById: request.user.sub,
+          date: new Date(),
+        },
+        include: { createdBy: { select: { id: true, name: true } } },
+      });
+
+      await audit(request.user.sub, 'RESTOCK_REQUESTED', 'Expense', expense.id, {
+        productId: product.id,
+        quantity: body.quantity,
+        totalCost,
+      });
+
+      return reply.code(201).send({
+        id: expense.id,
+        productId: product.id,
+        quantity: body.quantity,
+        unitCost: body.unitCost,
+        totalCost,
+        status: 'PENDING',
+        description: expense.description,
+      });
+    },
+  );
+
+  app.post(
+    '/inventory/restock-requests/:id/approve',
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const expense = await prisma.expense.findUnique({ where: { id } });
+      if (!expense) throw notFound('Restock request');
+      if (expense.category !== 'RESTOCK_PENDING') {
+        throw new AppError(409, 'This restock request has already been processed', 'ALREADY_PROCESSED');
+      }
+
+      const match = expense.description.match(/\[RESTOCK:([^:]+):(\d+):(\d+)\]/);
+      if (!match) throw new AppError(400, 'Invalid restock request payload', 'INVALID_PAYLOAD');
+
+      const productId = match[1];
+      const quantity = Number(match[2]);
+      const product = await prisma.product.findUnique({ where: { id: productId } });
+      if (!product) throw notFound('Product');
+
+      const serials: string[] = [];
+      const timestamp = Date.now().toString(36).toUpperCase();
+      for (let i = 0; i < quantity; i += 1) {
+        serials.push(`${product.sku}-${timestamp}-${String(i + 1).padStart(3, '0')}`);
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // Approve expense to deduct cost
+        await tx.expense.update({
+          where: { id },
+          data: { category: 'RESTOCK_APPROVED' },
+        });
+
+        // Add physical inventory units
+        await tx.inventoryUnit.createMany({
+          data: serials.map((serialNumber) => ({
+            productId: product.id,
+            serialNumber,
+            warehouseLocation: 'Main warehouse · Restocked',
+            status: 'IN_STOCK',
+          })),
+        });
+      });
+
+      await audit(request.user.sub, 'RESTOCK_APPROVED', 'Expense', id, {
+        productId,
+        quantity,
+        amountDeducted: expense.amount,
+      });
+
+      return {
+        id,
+        status: 'APPROVED',
+        quantityAdded: quantity,
+        productName: product.name,
+        amountDeducted: expense.amount,
+      };
+    },
+  );
+
+  app.post(
+    '/inventory/restock-requests/:id/reject',
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const expense = await prisma.expense.findUnique({ where: { id } });
+      if (!expense) throw notFound('Restock request');
+      if (expense.category !== 'RESTOCK_PENDING') {
+        throw new AppError(409, 'This restock request has already been processed', 'ALREADY_PROCESSED');
+      }
+
+      await prisma.expense.update({
+        where: { id },
+        data: { category: 'RESTOCK_REJECTED' },
+      });
+
+      await audit(request.user.sub, 'RESTOCK_REJECTED', 'Expense', id, {});
+      return { id, status: 'REJECTED' };
+    },
+  );
 };

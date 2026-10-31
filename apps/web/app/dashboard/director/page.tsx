@@ -15,12 +15,15 @@ import {
   Table,
   Text,
 } from '@mantine/core';
-import { useQuery } from '@tanstack/react-query';
+import { notifications } from '@mantine/notifications';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   ArrowRight,
   BadgeIndianRupee,
+  Boxes,
   CalendarClock,
+  Check,
   CircleDollarSign,
   Clock3,
   Headphones,
@@ -30,10 +33,11 @@ import {
   TrendingUp,
   Wallet,
   Wrench,
+  X,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 import { formatDate, formatDateTime, formatINR, titleCase } from '@/lib/format';
-import type { DashboardDirector } from '@/lib/types';
+import type { DashboardDirector, RestockRequest } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -51,9 +55,51 @@ export default function DirectorDashboardPage() {
 }
 
 function DirectorDashboard() {
+  const queryClient = useQueryClient();
+
   const query = useQuery({
     queryKey: ['dashboard', 'director'],
     queryFn: async () => (await api.get<DashboardDirector>('/dashboard/director')).data,
+  });
+
+  const restockQuery = useQuery({
+    queryKey: ['inventory', 'restock-requests'],
+    queryFn: async () => (await api.get<RestockRequest[]>('/inventory/restock-requests')).data,
+  });
+
+  const restockRequests = restockQuery.data ?? [];
+  const pendingRestock = restockRequests.filter((r) => r.status === 'PENDING');
+
+  const approveRestockMutation = useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/inventory/restock-requests/${id}/approve`)).data,
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      notifications.show({
+        title: 'Restock approved & cost deducted',
+        message: `${res.quantityAdded} units added to inventory. ${formatINR(res.amountDeducted)} deducted from company funds.`,
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Approval failed', message: apiError(error), color: 'red' }),
+  });
+
+  const rejectRestockMutation = useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/inventory/restock-requests/${id}/reject`)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      notifications.show({
+        title: 'Restock request rejected',
+        message: 'The request was marked rejected.',
+        color: 'gray',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Rejection failed', message: apiError(error), color: 'red' }),
   });
 
   if (query.isLoading) return <LoadingState label="Building the director view…" />;
@@ -328,6 +374,90 @@ function DirectorDashboard() {
           </Stack>
         </Grid.Col>
       </Grid>
+
+      <Box mb="md">
+        <Panel
+          title="Warehouse Restock & Procurement Requests"
+          subtitle="Warehouse requests replenish stock. Upon Director agreement, inventory cost is deducted from company funds and units are created."
+          action={
+            <Button
+              component={Link}
+              href="/dashboard/inventory"
+              variant="subtle"
+              size="compact-sm"
+              rightSection={<ArrowRight size={14} />}
+            >
+              Inventory
+            </Button>
+          }
+        >
+          {pendingRestock.length === 0 ? (
+            <Group gap="sm" p="xs">
+              <Check size={16} color="#0f766e" />
+              <Text fz="sm" c="dimmed">
+                No restock requests awaiting Director approval. All warehouse replenishment is up to date.
+              </Text>
+            </Group>
+          ) : (
+            <Stack gap="sm">
+              {pendingRestock.map((req) => (
+                <Box
+                  key={req.id}
+                  p="sm"
+                  style={{
+                    borderRadius: 8,
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                  }}
+                >
+                  <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+                    <div>
+                      <Group gap="xs" mb={2}>
+                        <Badge color="orange" size="xs">
+                          {req.quantity} units requested
+                        </Badge>
+                        <Text fz="xs" c="dimmed">
+                          {formatDate(req.createdAt)} · By {req.requestedBy}
+                        </Text>
+                      </Group>
+                      <Text fz="sm" fw={700}>
+                        {req.description}
+                      </Text>
+                      <Text fz="xs" c="dimmed">
+                        Unit price: {formatINR(req.unitCost)} · Total cost to deduct:{' '}
+                        <Text component="span" fw={700} c="red.8">
+                          {formatINR(req.totalCost)}
+                        </Text>
+                      </Text>
+                    </div>
+                    <Group gap="xs">
+                      <Button
+                        size="xs"
+                        color="teal"
+                        leftSection={<Check size={14} />}
+                        loading={approveRestockMutation.isPending}
+                        onClick={() => approveRestockMutation.mutate(req.id)}
+                      >
+                        Agree & Deduct ({formatINR(req.totalCost)})
+                      </Button>
+                      <Button
+                        size="xs"
+                        color="red"
+                        variant="light"
+                        leftSection={<X size={14} />}
+                        loading={rejectRestockMutation.isPending}
+                        onClick={() => rejectRestockMutation.mutate(req.id)}
+                      >
+                        Reject
+                      </Button>
+                    </Group>
+                  </Group>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </Panel>
+      </Box>
 
       <Grid gap="md">
         <Grid.Col span={{ base: 12, lg: 4 }}>

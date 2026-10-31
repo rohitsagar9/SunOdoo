@@ -28,11 +28,13 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarPlus,
   Camera,
   CheckCircle2,
   ClipboardCheck,
+  Clock,
   FilePlus2,
   FileText,
   IndianRupee,
@@ -106,8 +108,9 @@ function LeadDetail() {
   });
   const [surveyForm, setSurveyForm] = useState({
     technicianId: '',
-    date: '',
-    slot: '09:00 - 12:00',
+    date: new Date().toISOString().slice(0, 10),
+    startTime: '10:00',
+    endTime: '11:30',
     notes: '',
   });
   const [surveyReport, setSurveyReport] = useState({
@@ -150,7 +153,8 @@ function LeadDetail() {
       return {
         technicianId: lead.survey?.technicianId ?? current.technicianId,
         date: date || new Date().toISOString().slice(0, 10),
-        slot: current.slot,
+        startTime: current.startTime || '10:00',
+        endTime: current.endTime || '11:30',
         notes: lead.survey?.findings ?? '',
       };
     });
@@ -205,22 +209,63 @@ function LeadDetail() {
     },
   });
 
-  const occupiedSlots = useMemo(() => {
+  const toMins = (t: string) => {
+    const parts = (t || '').trim().split(':').map(Number);
+    return (parts[0] || 0) * 60 + (parts[1] || 0);
+  };
+
+  const parseRange = (slotStr?: string | null) => {
+    if (!slotStr) return null;
+    const parts = slotStr.split('-');
+    if (parts.length >= 2) {
+      return {
+        start: toMins(parts[0]),
+        end: toMins(parts[1]),
+        rawStart: parts[0].trim(),
+        rawEnd: parts[1].trim(),
+      };
+    }
+    return null;
+  };
+
+  const timingConflict = useMemo(() => {
+    if (!surveyForm.date || !surveyForm.startTime || !surveyForm.endTime || !jobsQuery.data) return null;
+    const newStart = toMins(surveyForm.startTime);
+    const newEnd = toMins(surveyForm.endTime);
+    if (newEnd <= newStart) {
+      return { message: 'End time must be after start time' };
+    }
+
     const jobs = Array.isArray(jobsQuery.data) ? jobsQuery.data : [];
-    return jobs
-      .filter((j) => j && j.status !== 'CANCELLED' && j.status !== 'COMPLETED' && j.leadId !== id && j.scheduledSlot)
-      .map((j) => j.scheduledSlot!);
-  }, [jobsQuery.data, id]);
+    for (const j of jobs) {
+      if (j && j.status !== 'CANCELLED' && j.status !== 'COMPLETED' && j.leadId !== id && j.scheduledSlot) {
+        const range = parseRange(j.scheduledSlot);
+        if (range) {
+          const overlap = newStart < range.end && newEnd > range.start;
+          if (overlap) {
+            return {
+              job: j,
+              conflictStart: range.rawStart,
+              conflictEnd: range.rawEnd,
+              message: `Technician already has work allocated from ${range.rawStart} to ${range.rawEnd}. Please choose a timing before ${range.rawStart} or after ${range.rawEnd}.`,
+            };
+          }
+        }
+      }
+    }
+    return null;
+  }, [surveyForm.date, surveyForm.startTime, surveyForm.endTime, jobsQuery.data, id]);
+
+  const customSlot = `${surveyForm.startTime} - ${surveyForm.endTime}`;
 
   const surveyMutation = useMutation({
     mutationFn: async () => {
-      const slotStart = surveyForm.slot.split(' - ')[0] || '09:00';
-      const scheduledAt = `${surveyForm.date}T${slotStart}:00`;
+      const scheduledAt = `${surveyForm.date}T${surveyForm.startTime}:00`;
       return (
         await api.post(`/leads/${id}/survey`, {
           technicianId: surveyForm.technicianId,
           scheduledAt,
-          slot: surveyForm.slot || undefined,
+          slot: customSlot,
           notes: surveyForm.notes || undefined,
         })
       ).data;
@@ -229,7 +274,7 @@ function LeadDetail() {
       invalidate();
       notifications.show({
         title: 'Survey scheduled',
-        message: 'The technician job has been created and the slot reserved.',
+        message: `Technician allocated for ${customSlot}. Job card created.`,
         color: 'teal',
       });
     },
@@ -495,43 +540,102 @@ function LeadDetail() {
                         setSurveyForm((current) => ({ ...current, date: val }));
                       }}
                     />
-                    <Select
-                      label="Time slot"
-                      placeholder="Select slot"
-                      data={STANDARD_SLOTS.map((slot) => {
-                        const occupied = occupiedSlots.includes(slot);
-                        return {
-                          value: slot,
-                          label: occupied ? `${slot} (Occupied · Unavailable)` : `${slot} (Available)`,
-                          disabled: occupied,
-                        };
-                      })}
-                      value={surveyForm.slot}
-                      onChange={(value) =>
-                        setSurveyForm((current) => ({ ...current, slot: value ?? '' }))
-                      }
-                      allowDeselect={false}
-                      error={occupiedSlots.includes(surveyForm.slot) ? 'Technician is already booked in this slot' : undefined}
+                    <TextInput
+                      label="Start time"
+                      type="time"
+                      required
+                      value={surveyForm.startTime}
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                        setSurveyForm((current) => ({ ...current, startTime: val }));
+                      }}
+                    />
+                    <TextInput
+                      label="End time"
+                      type="time"
+                      required
+                      value={surveyForm.endTime}
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                        setSurveyForm((current) => ({ ...current, endTime: val }));
+                      }}
                     />
                     <TextInput
                       label="Visit notes"
                       placeholder="Gate code, contact person…"
                       value={surveyForm.notes}
+                      style={{ gridColumn: 'span 2' }}
                       onChange={(event) => {
                         const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
                         setSurveyForm((current) => ({ ...current, notes: val }));
                       }}
                     />
                   </SimpleGrid>
+
+                  {timingConflict && (
+                    <Alert
+                      color="red"
+                      variant="light"
+                      radius="md"
+                      title="Timing slot conflict"
+                      icon={<AlertTriangle size={18} />}
+                    >
+                      <Text size="sm" mb="xs">
+                        {timingConflict.message}
+                      </Text>
+                      {timingConflict.conflictStart && timingConflict.conflictEnd && (
+                        <Group gap="xs" mt="xs">
+                          <Text size="xs" fw={600} c="dimmed">
+                            Sales recommendation:
+                          </Text>
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            color="red"
+                            onClick={() => {
+                              const confMins = toMins(timingConflict.conflictStart!);
+                              const newEnd = timingConflict.conflictStart!;
+                              const startMins = Math.max(0, confMins - 90);
+                              const newStart = `${String(Math.floor(startMins / 60)).padStart(2, '0')}:${String(startMins % 60).padStart(2, '0')}`;
+                              setSurveyForm((curr) => ({ ...curr, startTime: newStart, endTime: newEnd }));
+                            }}
+                          >
+                            Book before ({timingConflict.conflictStart})
+                          </Button>
+                          <Button
+                            size="compact-xs"
+                            variant="light"
+                            color="red"
+                            onClick={() => {
+                              const confMins = toMins(timingConflict.conflictEnd!);
+                              const newStart = timingConflict.conflictEnd!;
+                              const endMins = Math.min(23 * 60 + 59, confMins + 90);
+                              const newEnd = `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`;
+                              setSurveyForm((curr) => ({ ...curr, startTime: newStart, endTime: newEnd }));
+                            }}
+                          >
+                            Book after ({timingConflict.conflictEnd})
+                          </Button>
+                        </Group>
+                      )}
+                    </Alert>
+                  )}
+
                   <Group justify="flex-end">
                     <Button
                       leftSection={<CalendarPlus size={15} />}
                       color="sun"
-                      disabled={!surveyForm.technicianId || !surveyForm.date || !surveyForm.slot || occupiedSlots.includes(surveyForm.slot)}
+                      disabled={
+                        !surveyForm.technicianId ||
+                        !surveyForm.date ||
+                        !surveyForm.startTime ||
+                        !surveyForm.endTime ||
+                        Boolean(timingConflict)
+                      }
                       loading={surveyMutation.isPending}
                       onClick={() => surveyMutation.mutate()}
                     >
-                      Schedule survey
+                      Schedule survey ({customSlot})
                     </Button>
                   </Group>
                 </Stack>

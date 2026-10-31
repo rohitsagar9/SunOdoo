@@ -34,6 +34,8 @@ async function recalcOrder(orderId: string) {
   let status = order.status;
   if (order.status === 'PENDING_PAYMENT' && advancePaid > 0) {
     status = 'ADVANCE_PAID';
+  } else if (order.status === 'INSTALLED' && balanceDue === 0) {
+    status = 'COMPLETED';
   }
 
   return { order, advancePaid, balanceDue, status };
@@ -140,11 +142,32 @@ export const paymentRoutes: FastifyPluginAsync = async (app) => {
             advancePaid: calc.advancePaid,
             balanceDue: calc.balanceDue,
             status: calc.status,
+            completedAt: calc.status === 'COMPLETED' ? (calc.order.completedAt ?? new Date()) : undefined,
             approvedById: request.user.sub,
             approvedAt: new Date(),
           },
         });
         await ensureInstallationJob(body.orderId, request.user.sub);
+
+        if (calc.balanceDue === 0) {
+          const invoice = await prisma.invoice.findFirst({ where: { orderId: body.orderId } });
+          if (invoice && invoice.status !== 'PAID') {
+            await prisma.invoice.update({
+              where: { id: invoice.id },
+              data: { status: 'PAID', paidAt: new Date() },
+            });
+          }
+        }
+      }
+
+      if (payment.status === 'APPROVED' && body.ticketId) {
+        const invoice = await prisma.invoice.findFirst({ where: { ticketId: body.ticketId } });
+        if (invoice && invoice.status !== 'PAID') {
+          await prisma.invoice.update({
+            where: { id: invoice.id },
+            data: { status: 'PAID', paidAt: new Date() },
+          });
+        }
       }
 
       await audit(request.user.sub, 'PAYMENT_RECORDED', 'Payment', payment.id, {
@@ -183,11 +206,22 @@ export const paymentRoutes: FastifyPluginAsync = async (app) => {
             advancePaid: calc.advancePaid,
             balanceDue: calc.balanceDue,
             status: calc.status,
+            completedAt: calc.status === 'COMPLETED' ? (calc.order.completedAt ?? new Date()) : undefined,
             approvedById: request.user.sub,
             approvedAt: new Date(),
           },
         });
         await ensureInstallationJob(existing.orderId, request.user.sub);
+
+        if (calc.balanceDue === 0) {
+          const invoice = await prisma.invoice.findFirst({ where: { orderId: existing.orderId } });
+          if (invoice && invoice.status !== 'PAID') {
+            await prisma.invoice.update({
+              where: { id: invoice.id },
+              data: { status: 'PAID', paidAt: new Date() },
+            });
+          }
+        }
       }
 
       if (existing.ticketId) {

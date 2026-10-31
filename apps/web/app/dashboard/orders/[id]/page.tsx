@@ -27,6 +27,7 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  Banknote,
   Barcode,
   CheckCircle2,
   ClipboardList,
@@ -43,12 +44,14 @@ import {
   Wrench,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { formatDate, formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
 import type { Order } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { LoadingState } from '@/components/States';
 import { InlineStat, Panel } from '@/components/dashboard/Panel';
 import { RoleGate } from '@/components/dashboard/RoleGate';
+import { RecordOfflinePaymentModal } from '@/components/dashboard/RecordOfflinePaymentModal';
 
 const MUST_SCAN = ['INVERTER', 'BATTERY', 'CHARGE_CONTROLLER'];
 
@@ -64,9 +67,13 @@ function OrderDetail() {
   const params = useParams<{ id: string }>();
   const id = params?.id;
   const queryClient = useQueryClient();
+  const { hasRole } = useAuth();
+  const canRecordOffline = hasRole('SALES', 'DIRECTOR');
+
   const [serial, setSerial] = useState('');
   const [docFile, setDocFile] = useState<File | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [offlineModalOpen, setOfflineModalOpen] = useState(false);
 
   const query = useQuery({
     queryKey: ['order', id],
@@ -688,6 +695,17 @@ function OrderDetail() {
                     No payments recorded yet.
                   </Text>
                 )}
+                {canRecordOffline && order.balanceDue > 0 && (
+                  <Button
+                    color="teal"
+                    size="compact-sm"
+                    leftSection={<Banknote size={14} />}
+                    onClick={() => setOfflineModalOpen(true)}
+                    fullWidth
+                  >
+                    Record Offline Payment
+                  </Button>
+                )}
                 <Button
                   component={Link}
                   href="/dashboard/payments"
@@ -762,6 +780,16 @@ function OrderDetail() {
           </Stack>
         </Grid.Col>
       </Grid>
+
+      <RecordOfflinePaymentModal
+        opened={offlineModalOpen}
+        onClose={() => setOfflineModalOpen(false)}
+        initialOrderId={order.id}
+        initialOrder={order}
+        onSuccess={() => {
+          invalidate();
+        }}
+      />
     </>
   );
 }

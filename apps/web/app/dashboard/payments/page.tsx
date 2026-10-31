@@ -20,6 +20,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  Banknote,
   CheckCircle2,
   ExternalLink,
   ImageIcon,
@@ -30,6 +31,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, apiError, assetUrl } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
 import type { Payment } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -38,6 +40,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { EmptyState, LoadingState } from '@/components/States';
 import { Panel } from '@/components/dashboard/Panel';
 import { RoleGate } from '@/components/dashboard/RoleGate';
+import { RecordOfflinePaymentModal } from '@/components/dashboard/RecordOfflinePaymentModal';
 
 export default function PaymentsPage() {
   return (
@@ -49,11 +52,15 @@ export default function PaymentsPage() {
 
 function PaymentsQueue() {
   const queryClient = useQueryClient();
+  const { hasRole } = useAuth();
+  const canRecordOffline = hasRole('SALES', 'DIRECTOR');
+
   const [tab, setTab] = useState<string>('PENDING');
   const [search, setSearch] = useState('');
   const [rejecting, setRejecting] = useState<Payment | null>(null);
   const [reason, setReason] = useState('');
   const [preview, setPreview] = useState<Payment | null>(null);
+  const [offlineModalOpen, setOfflineModalOpen] = useState(false);
 
   const query = useQuery({
     queryKey: ['payments'],
@@ -141,15 +148,26 @@ function PaymentsQueue() {
         title="Payment queue"
         description="Match every UPI screenshot to an order, then approve to flip the balance and unlock installation."
         actions={
-          <Button
-            variant="light"
-            color="gray"
-            leftSection={<RefreshCw size={15} />}
-            onClick={() => query.refetch()}
-            loading={query.isFetching}
-          >
-            Refresh
-          </Button>
+          <Group gap="sm">
+            {canRecordOffline && (
+              <Button
+                color="sun"
+                leftSection={<Banknote size={15} />}
+                onClick={() => setOfflineModalOpen(true)}
+              >
+                Record Offline Payment
+              </Button>
+            )}
+            <Button
+              variant="light"
+              color="gray"
+              leftSection={<RefreshCw size={15} />}
+              onClick={() => query.refetch()}
+              loading={query.isFetching}
+            >
+              Refresh
+            </Button>
+          </Group>
         }
       />
 
@@ -421,6 +439,15 @@ function PaymentsQueue() {
           </Group>
         </Stack>
       </Modal>
+
+      <RecordOfflinePaymentModal
+        opened={offlineModalOpen}
+        onClose={() => setOfflineModalOpen(false)}
+        onSuccess={() => {
+          setTab('APPROVED');
+          query.refetch();
+        }}
+      />
     </>
   );
 }

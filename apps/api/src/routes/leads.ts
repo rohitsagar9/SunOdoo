@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
-import { AppError, notFound } from '../lib/errors.js';
+import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { nextJobNumber, nextLeadReference } from '../lib/sequence.js';
 import { audit } from '../lib/audit.js';
 
@@ -348,6 +348,36 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
 
       const survey = await prisma.survey.findUnique({ where: { id }, include: { lead: true } });
       if (!survey) throw notFound('Survey');
+
+      if (body.approved === true) {
+        const finalRoofDirection = body.roofDirection ?? survey.roofDirection;
+        const finalTiltDegrees = body.tiltDegrees ?? survey.tiltDegrees;
+        const finalCableDistanceM = body.cableDistanceM ?? survey.cableDistanceM;
+        const finalShadowFreeAreaSqft = body.shadowFreeAreaSqft ?? survey.shadowFreeAreaSqft;
+
+        if (
+          !finalRoofDirection ||
+          finalTiltDegrees == null ||
+          finalCableDistanceM == null ||
+          finalShadowFreeAreaSqft == null
+        ) {
+          throw badRequest(
+            'All roof site measurements (roof orientation, tilt angle, cable distance, and shadow-free area) must be entered before approving feasibility.',
+          );
+        }
+      }
+
+      if (
+        body.approved === undefined &&
+        !body.rejectionReasons &&
+        !body.roofDirection &&
+        body.tiltDegrees == null &&
+        body.cableDistanceM == null &&
+        body.shadowFreeAreaSqft == null &&
+        !body.findings
+      ) {
+        throw badRequest('Please enter at least one measurement or finding before saving.');
+      }
 
       let combinedFindings = body.findings;
       if (body.approved === false && body.rejectionReasons && body.rejectionReasons.length > 0) {

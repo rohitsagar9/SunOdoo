@@ -145,16 +145,39 @@ function JobDetail() {
     findings: '',
   });
 
+  const hasAnyMeasurement = Boolean(
+    measurements.roofDirection.trim() ||
+    measurements.tiltDegrees.trim() ||
+    measurements.cableDistanceM.trim() ||
+    measurements.shadowFreeAreaSqft.trim() ||
+    measurements.findings.trim()
+  );
+
+  const hasAllCoreMeasurements = Boolean(
+    measurements.roofDirection.trim() &&
+    measurements.tiltDegrees.trim() &&
+    measurements.cableDistanceM.trim() &&
+    measurements.shadowFreeAreaSqft.trim()
+  );
+
   const surveyMutation = useMutation({
     mutationFn: async (approve?: boolean) => {
       if (!job?.lead?.survey?.id) return;
+      if (!hasAnyMeasurement) {
+        throw new Error('Please enter roof site measurements before saving.');
+      }
+      if (approve && !hasAllCoreMeasurements) {
+        throw new Error(
+          'All measurements (orientation, tilt angle, cable distance, shadow-free area) are required before approving feasibility.',
+        );
+      }
       return (
         await api.patch(`/surveys/${job.lead.survey.id}`, {
-          roofDirection: measurements.roofDirection || undefined,
+          roofDirection: measurements.roofDirection.trim() || undefined,
           tiltDegrees: measurements.tiltDegrees ? Number(measurements.tiltDegrees) : undefined,
           cableDistanceM: measurements.cableDistanceM ? Number(measurements.cableDistanceM) : undefined,
           shadowFreeAreaSqft: measurements.shadowFreeAreaSqft ? Number(measurements.shadowFreeAreaSqft) : undefined,
-          findings: measurements.findings || undefined,
+          findings: measurements.findings.trim() || undefined,
           ...(approve != null ? { approved: approve } : {}),
         })
       ).data;
@@ -596,6 +619,7 @@ function JobDetail() {
                     <TextInput
                       label="Roof orientation / direction"
                       placeholder="e.g. South / South-West"
+                      required
                       value={measurements.roofDirection}
                       onChange={(e) => setMeasurements((prev) => ({ ...prev, roofDirection: safeValue(e) }))}
                     />
@@ -603,6 +627,7 @@ function JobDetail() {
                       label="Tilt angle (degrees)"
                       type="number"
                       placeholder="e.g. 18"
+                      required
                       value={measurements.tiltDegrees}
                       onChange={(e) => setMeasurements((prev) => ({ ...prev, tiltDegrees: safeValue(e) }))}
                     />
@@ -610,6 +635,7 @@ function JobDetail() {
                       label="Cable distance (m)"
                       type="number"
                       placeholder="e.g. 25"
+                      required
                       value={measurements.cableDistanceM}
                       onChange={(e) => setMeasurements((prev) => ({ ...prev, cableDistanceM: safeValue(e) }))}
                     />
@@ -617,6 +643,7 @@ function JobDetail() {
                       label="Shadow-free area (sq ft)"
                       type="number"
                       placeholder="e.g. 500"
+                      required
                       value={measurements.shadowFreeAreaSqft}
                       onChange={(e) => setMeasurements((prev) => ({ ...prev, shadowFreeAreaSqft: safeValue(e) }))}
                     />
@@ -628,6 +655,11 @@ function JobDetail() {
                     value={measurements.findings}
                     onChange={(e) => setMeasurements((prev) => ({ ...prev, findings: safeValue(e) }))}
                   />
+                  {!hasAllCoreMeasurements && !job.lead?.survey?.approved && (
+                    <Text fz={11} c="dimmed">
+                      * All 4 measurements (orientation, tilt angle, cable distance, shadow-free area) are required before approving feasibility.
+                    </Text>
+                  )}
                   <Group justify="space-between" wrap="wrap">
                     <Badge color={job.lead?.survey?.approved ? 'teal' : 'yellow'} variant="light">
                       {job.lead?.survey?.approved ? 'Feasibility Approved' : 'Feasibility Pending Sign-off'}
@@ -636,8 +668,19 @@ function JobDetail() {
                       <Button
                         variant="light"
                         color="indigo"
+                        disabled={!hasAnyMeasurement}
                         loading={surveyMutation.isPending}
-                        onClick={() => surveyMutation.mutate(false)}
+                        onClick={() => {
+                          if (!hasAnyMeasurement) {
+                            notifications.show({
+                              title: 'Measurements required',
+                              message: 'Please enter site measurements before saving.',
+                              color: 'red',
+                            });
+                            return;
+                          }
+                          surveyMutation.mutate(false);
+                        }}
                       >
                         Save measurements
                       </Button>
@@ -645,8 +688,20 @@ function JobDetail() {
                         <Button
                           color="teal"
                           leftSection={<ShieldCheck size={14} />}
+                          disabled={!hasAllCoreMeasurements}
                           loading={surveyMutation.isPending}
-                          onClick={() => surveyMutation.mutate(true)}
+                          onClick={() => {
+                            if (!hasAllCoreMeasurements) {
+                              notifications.show({
+                                title: 'Missing measurements',
+                                message:
+                                  'Please enter roof orientation, tilt angle, cable distance, and shadow-free area before approving feasibility.',
+                                color: 'red',
+                              });
+                              return;
+                            }
+                            surveyMutation.mutate(true);
+                          }}
                         >
                           Approve feasibility
                         </Button>

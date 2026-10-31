@@ -14,6 +14,10 @@ export function notFound(entity: string) {
   return new AppError(404, `${entity} not found`, 'NOT_FOUND');
 }
 
+export function badRequest(message: string) {
+  return new AppError(400, message, 'BAD_REQUEST');
+}
+
 export function forbidden(message = 'You do not have permission to perform this action') {
   return new AppError(403, message, 'FORBIDDEN');
 }

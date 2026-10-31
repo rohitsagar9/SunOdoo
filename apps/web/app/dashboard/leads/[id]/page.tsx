@@ -282,15 +282,38 @@ function LeadDetail() {
       notifications.show({ title: 'Could not schedule survey', message: apiError(error), color: 'red' }),
   });
 
+  const hasAnySurveyReport = Boolean(
+    surveyReport.roofDirection.trim() ||
+    surveyReport.tiltDegrees ||
+    surveyReport.cableDistanceM ||
+    surveyReport.shadowFreeAreaSqft ||
+    surveyReport.findings.trim()
+  );
+
+  const hasAllSurveyMeasurements = Boolean(
+    surveyReport.roofDirection.trim() &&
+    surveyReport.tiltDegrees &&
+    surveyReport.cableDistanceM &&
+    surveyReport.shadowFreeAreaSqft
+  );
+
   const surveyReportMutation = useMutation({
     mutationFn: async (payload: { approve: boolean; reasons?: string[]; notes?: string }) => {
       if (!lead?.survey) throw new Error('No survey');
+      if (payload.approve && !hasAllSurveyMeasurements) {
+        throw new Error(
+          'All measurements (roof direction, tilt angle, cable distance, shadow-free area) are required to approve survey.',
+        );
+      }
+      if (!payload.approve && !payload.reasons && !hasAnySurveyReport) {
+        throw new Error('Please enter measurements before saving.');
+      }
       const response = await api.patch(`/surveys/${lead.survey.id}`, {
-        roofDirection: surveyReport.roofDirection || undefined,
-        tiltDegrees: surveyReport.tiltDegrees || undefined,
-        cableDistanceM: surveyReport.cableDistanceM || undefined,
-        shadowFreeAreaSqft: surveyReport.shadowFreeAreaSqft || undefined,
-        findings: payload.notes || surveyReport.findings || undefined,
+        roofDirection: surveyReport.roofDirection.trim() || undefined,
+        tiltDegrees: surveyReport.tiltDegrees ? Number(surveyReport.tiltDegrees) : undefined,
+        cableDistanceM: surveyReport.cableDistanceM ? Number(surveyReport.cableDistanceM) : undefined,
+        shadowFreeAreaSqft: surveyReport.shadowFreeAreaSqft ? Number(surveyReport.shadowFreeAreaSqft) : undefined,
+        findings: payload.notes || surveyReport.findings.trim() || undefined,
         approved: payload.approve,
         rejectionReasons: payload.reasons,
       });
@@ -681,6 +704,7 @@ function LeadDetail() {
                     <TextInput
                       label="Roof direction"
                       placeholder="South / South-West"
+                      required
                       value={surveyReport.roofDirection}
                       onChange={(event) => {
                         const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
@@ -693,6 +717,7 @@ function LeadDetail() {
                     <TextInput
                       label="Tilt (degrees)"
                       type="number"
+                      required
                       value={surveyReport.tiltDegrees}
                       onChange={(event) => {
                         const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
@@ -705,6 +730,7 @@ function LeadDetail() {
                     <TextInput
                       label="Cable distance (m)"
                       type="number"
+                      required
                       value={surveyReport.cableDistanceM}
                       onChange={(event) => {
                         const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
@@ -717,6 +743,7 @@ function LeadDetail() {
                     <TextInput
                       label="Shadow-free area (sq ft)"
                       type="number"
+                      required
                       value={surveyReport.shadowFreeAreaSqft}
                       onChange={(event) => {
                         const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
@@ -736,11 +763,27 @@ function LeadDetail() {
                       setSurveyReport((current) => ({ ...current, findings: val }));
                     }}
                   />
+                  {!hasAllSurveyMeasurements && !survey.approved && (
+                    <Text fz={11} c="dimmed">
+                      * All 4 measurements (orientation, tilt angle, cable distance, shadow-free area) are required to approve survey.
+                    </Text>
+                  )}
                   <Group justify="space-between" wrap="wrap">
                     <Button
                       variant="light"
                       color="gray"
-                      onClick={() => surveyReportMutation.mutate({ approve: false })}
+                      disabled={!hasAnySurveyReport}
+                      onClick={() => {
+                        if (!hasAnySurveyReport) {
+                          notifications.show({
+                            title: 'Measurements required',
+                            message: 'Please enter site measurements before saving.',
+                            color: 'red',
+                          });
+                          return;
+                        }
+                        surveyReportMutation.mutate({ approve: false });
+                      }}
                       loading={surveyReportMutation.isPending}
                     >
                       Save measurements
@@ -759,7 +802,19 @@ function LeadDetail() {
                           <Button
                             color="teal"
                             leftSection={<ShieldCheck size={15} />}
-                            onClick={() => surveyReportMutation.mutate({ approve: true })}
+                            disabled={!hasAllSurveyMeasurements}
+                            onClick={() => {
+                              if (!hasAllSurveyMeasurements) {
+                                notifications.show({
+                                  title: 'Missing measurements',
+                                  message:
+                                    'Please enter roof direction, tilt angle, cable distance, and shadow-free area before approving.',
+                                  color: 'red',
+                                });
+                                return;
+                              }
+                              surveyReportMutation.mutate({ approve: true });
+                            }}
                             loading={surveyReportMutation.isPending}
                           >
                             Approve survey

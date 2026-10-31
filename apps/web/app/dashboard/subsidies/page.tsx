@@ -31,7 +31,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatINR, systemLabel, titleCase } from '@/lib/format';
+import { formatDate, formatINR, safeValue, systemLabel, titleCase } from '@/lib/format';
 import type { SubsidyRecord } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
@@ -199,7 +199,7 @@ function SubsidyTracker() {
               placeholder="Customer, order, application…"
               leftSection={<Search size={15} />}
               value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
+              onChange={(event) => setSearch(safeValue(event))}
               w={{ base: 170, sm: 240 }}
             />
             <Select
@@ -399,7 +399,7 @@ function SubsidyTracker() {
               placeholder="PMSG-2026-000123"
               value={form.applicationNumber}
               onChange={(event) =>
-                setForm((current) => ({ ...current, applicationNumber: event.currentTarget.value }))
+                setForm((current) => ({ ...current, applicationNumber: safeValue(event) }))
               }
             />
             <Textarea
@@ -407,7 +407,7 @@ function SubsidyTracker() {
               placeholder="Documents collected, portal remarks, bank reference…"
               minRows={3}
               value={form.notes}
-              onChange={(event) => setForm((current) => ({ ...current, notes: event.currentTarget.value }))}
+              onChange={(event) => setForm((current) => ({ ...current, notes: safeValue(event) }))}
             />
             <Group justify="flex-end">
               <Button variant="subtle" color="gray" onClick={() => setEditing(null)}>

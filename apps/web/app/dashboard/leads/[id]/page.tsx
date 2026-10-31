@@ -373,9 +373,10 @@ function LeadDetail() {
                     min={1}
                     max={5}
                     value={details.requestedKw}
-                    onChange={(event) =>
-                      setDetails((current) => ({ ...current, requestedKw: event.currentTarget.value }))
-                    }
+                    onChange={(event) => {
+                      const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                      setDetails((current) => ({ ...current, requestedKw: val }));
+                    }}
                   />
                   <TextInput
                     label="Monthly bill (₹)"
@@ -385,20 +386,22 @@ function LeadDetail() {
                     step="1"
                     placeholder="Max ₹10,00,000"
                     value={details.monthlyBill}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
                       setDetails((current) => ({
                         ...current,
-                        monthlyBill: event.currentTarget.value.replace(/\D/g, '').slice(0, 7),
-                      }))
-                    }
+                        monthlyBill: String(val).replace(/\D/g, '').slice(0, 7),
+                      }));
+                    }}
                   />
                   <TextInput
                     label="Roof area (sq ft)"
                     type="number"
                     value={details.roofAreaSqft}
-                    onChange={(event) =>
-                      setDetails((current) => ({ ...current, roofAreaSqft: event.currentTarget.value }))
-                    }
+                    onChange={(event) => {
+                      const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                      setDetails((current) => ({ ...current, roofAreaSqft: val }));
+                    }}
                   />
                 </SimpleGrid>
                 <div>
@@ -418,9 +421,10 @@ function LeadDetail() {
                   label="Internal notes"
                   minRows={2}
                   value={details.notes}
-                  onChange={(event) =>
-                    setDetails((current) => ({ ...current, notes: event.currentTarget.value }))
-                  }
+                  onChange={(event) => {
+                    const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                    setDetails((current) => ({ ...current, notes: val }));
+                  }}
                 />
                 <Group justify="space-between">
                   {lead.status === 'NEW' ? (
@@ -482,9 +486,10 @@ function LeadDetail() {
                       label="Date & time"
                       type="datetime-local"
                       value={surveyForm.scheduledAt}
-                      onChange={(event) =>
-                        setSurveyForm((current) => ({ ...current, scheduledAt: event.currentTarget.value }))
-                      }
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                        setSurveyForm((current) => ({ ...current, scheduledAt: val }));
+                      }}
                     />
                     <Select
                       label="Slot"
@@ -508,9 +513,10 @@ function LeadDetail() {
                       label="Visit notes"
                       placeholder="Gate code, contact person…"
                       value={surveyForm.notes}
-                      onChange={(event) =>
-                        setSurveyForm((current) => ({ ...current, notes: event.currentTarget.value }))
-                      }
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                        setSurveyForm((current) => ({ ...current, notes: val }));
+                      }}
                     />
                   </SimpleGrid>
                   <Group justify="flex-end">
@@ -568,54 +574,59 @@ function LeadDetail() {
                       label="Roof direction"
                       placeholder="South / South-West"
                       value={surveyReport.roofDirection}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
                         setSurveyReport((current) => ({
                           ...current,
-                          roofDirection: event.currentTarget.value,
-                        }))
-                      }
+                          roofDirection: val,
+                        }));
+                      }}
                     />
                     <TextInput
                       label="Tilt (degrees)"
                       type="number"
                       value={surveyReport.tiltDegrees}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
                         setSurveyReport((current) => ({
                           ...current,
-                          tiltDegrees: event.currentTarget.value,
-                        }))
-                      }
+                          tiltDegrees: val,
+                        }));
+                      }}
                     />
                     <TextInput
                       label="Cable distance (m)"
                       type="number"
                       value={surveyReport.cableDistanceM}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
                         setSurveyReport((current) => ({
                           ...current,
-                          cableDistanceM: event.currentTarget.value,
-                        }))
-                      }
+                          cableDistanceM: val,
+                        }));
+                      }}
                     />
                     <TextInput
                       label="Shadow-free area (sq ft)"
                       type="number"
                       value={surveyReport.shadowFreeAreaSqft}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
                         setSurveyReport((current) => ({
                           ...current,
-                          shadowFreeAreaSqft: event.currentTarget.value,
-                        }))
-                      }
+                          shadowFreeAreaSqft: val,
+                        }));
+                      }}
                     />
                   </SimpleGrid>
                   <Textarea
                     label="Survey findings"
                     minRows={2}
                     value={surveyReport.findings}
-                    onChange={(event) =>
-                      setSurveyReport((current) => ({ ...current, findings: event.currentTarget.value }))
-                    }
+                    onChange={(event) => {
+                      const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                      setSurveyReport((current) => ({ ...current, findings: val }));
+                    }}
                   />
                   <Group justify="space-between" wrap="wrap">
                     <Button
@@ -958,9 +969,10 @@ function LeadDetail() {
             minRows={2}
             placeholder="Payment terms, subsidy assumptions…"
             value={quoteForm.notes}
-            onChange={(event) =>
-              setQuoteForm((current) => ({ ...current, notes: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+              setQuoteForm((current) => ({ ...current, notes: val }));
+            }}
           />
           <Group justify="flex-end">
             <Button variant="subtle" color="gray" onClick={() => setQuoteOpen(false)}>
@@ -1012,7 +1024,7 @@ function LeadDetail() {
             placeholder="Describe obstruction, shading, structural cracks, etc."
             minRows={3}
             value={rejectionNotes}
-            onChange={(e) => setRejectionNotes(e.currentTarget.value)}
+            onChange={(e) => setRejectionNotes(e?.target?.value ?? (e?.currentTarget as any)?.value ?? '')}
           />
           <Group justify="flex-end" mt="sm">
             <Button variant="subtle" color="gray" onClick={() => setRejectOpen(false)}>
@@ -1043,7 +1055,7 @@ function LeadDetail() {
             placeholder="Price too high, chose another vendor, roof unsuitable…"
             minRows={3}
             value={lostReason}
-            onChange={(event) => setLostReason(event.currentTarget.value)}
+            onChange={(event) => setLostReason(event?.target?.value ?? (event?.currentTarget as any)?.value ?? '')}
           />
           <Group justify="flex-end">
             <Button variant="subtle" color="gray" onClick={() => setLostOpen(false)}>

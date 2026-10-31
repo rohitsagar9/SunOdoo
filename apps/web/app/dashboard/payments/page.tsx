@@ -30,7 +30,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, apiError, assetUrl } from '@/lib/api';
-import { formatDateTime, formatINR, titleCase } from '@/lib/format';
+import { formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
 import type { Payment } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
@@ -205,7 +205,7 @@ function PaymentsQueue() {
             placeholder="Search order, customer or UTR…"
             leftSection={<Search size={15} />}
             value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
+            onChange={(event) => setSearch(safeValue(event))}
             w={{ base: '100%', sm: 300 }}
           />
         </Group>
@@ -402,7 +402,7 @@ function PaymentsQueue() {
             placeholder="Screenshot unclear, amount mismatch, duplicate UTR…"
             minRows={3}
             value={reason}
-            onChange={(event) => setReason(event.currentTarget.value)}
+            onChange={(event) => setReason(safeValue(event))}
           />
           <Group justify="flex-end">
             <Button variant="subtle" color="gray" onClick={() => setRejecting(null)}>

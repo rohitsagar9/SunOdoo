@@ -32,7 +32,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatINR, titleCase, todayInputValue } from '@/lib/format';
+import { formatDate, formatINR, safeValue, titleCase, todayInputValue } from '@/lib/format';
 import type { Expense } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
@@ -221,7 +221,7 @@ function ExpenseBook() {
                 placeholder="Search description, job or customer…"
                 leftSection={<Search size={15} />}
                 value={search}
-                onChange={(event) => setSearch(event.currentTarget.value)}
+                onChange={(event) => setSearch(safeValue(event))}
                 style={{ flex: 1, minWidth: 220 }}
               />
               <Select
@@ -402,7 +402,7 @@ function ExpenseBook() {
             required
             value={form.description}
             onChange={(event) =>
-              setForm((current) => ({ ...current, description: event.currentTarget.value }))
+              setForm((current) => ({ ...current, description: safeValue(event) }))
             }
           />
           <DateInput

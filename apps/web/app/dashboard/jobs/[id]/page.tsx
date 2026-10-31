@@ -49,7 +49,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { api, apiError, assetUrl } from '@/lib/api';
-import { formatDate, formatDateTime, formatINR, formatTime, titleCase } from '@/lib/format';
+import { formatDate, formatDateTime, formatINR, formatTime, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import type { Job } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -526,28 +526,28 @@ function JobDetail() {
                       label="Roof orientation / direction"
                       placeholder="e.g. South / South-West"
                       value={measurements.roofDirection}
-                      onChange={(e) => setMeasurements((prev) => ({ ...prev, roofDirection: e.currentTarget.value }))}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, roofDirection: safeValue(e) }))}
                     />
                     <TextInput
                       label="Tilt angle (degrees)"
                       type="number"
                       placeholder="e.g. 18"
                       value={measurements.tiltDegrees}
-                      onChange={(e) => setMeasurements((prev) => ({ ...prev, tiltDegrees: e.currentTarget.value }))}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, tiltDegrees: safeValue(e) }))}
                     />
                     <TextInput
                       label="Cable distance (m)"
                       type="number"
                       placeholder="e.g. 25"
                       value={measurements.cableDistanceM}
-                      onChange={(e) => setMeasurements((prev) => ({ ...prev, cableDistanceM: e.currentTarget.value }))}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, cableDistanceM: safeValue(e) }))}
                     />
                     <TextInput
                       label="Shadow-free area (sq ft)"
                       type="number"
                       placeholder="e.g. 500"
                       value={measurements.shadowFreeAreaSqft}
-                      onChange={(e) => setMeasurements((prev) => ({ ...prev, shadowFreeAreaSqft: e.currentTarget.value }))}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, shadowFreeAreaSqft: safeValue(e) }))}
                     />
                   </SimpleGrid>
                   <Textarea
@@ -555,7 +555,7 @@ function JobDetail() {
                     placeholder="Rooftop structural integrity, shadow analysis, parapet height..."
                     minRows={2}
                     value={measurements.findings}
-                    onChange={(e) => setMeasurements((prev) => ({ ...prev, findings: e.currentTarget.value }))}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, findings: safeValue(e) }))}
                   />
                   <Group justify="flex-end">
                     <Button
@@ -592,7 +592,7 @@ function JobDetail() {
                       label="Caption"
                       placeholder="South roof array after commissioning"
                       value={photoCaption}
-                      onChange={(event) => setPhotoCaption(event.currentTarget.value)}
+                      onChange={(event) => setPhotoCaption(safeValue(event))}
                       style={{ flex: 1, minWidth: 220 }}
                     />
                     <Button
@@ -658,7 +658,7 @@ function JobDetail() {
                   <TextInput
                     label="Signer name"
                     value={signerName}
-                    onChange={(event) => setSignerName(event.currentTarget.value)}
+                    onChange={(event) => setSignerName(safeValue(event))}
                   />
                   <SignaturePad onChange={setSignatureData} />
                   <Group justify="flex-end">
@@ -702,7 +702,7 @@ function JobDetail() {
                     placeholder="Generation normal, earthing OK"
                     value={completion.testResult}
                     onChange={(event) =>
-                      setCompletion((current) => ({ ...current, testResult: event.currentTarget.value }))
+                      setCompletion((current) => ({ ...current, testResult: safeValue(event) }))
                     }
                   />
                 </SimpleGrid>
@@ -712,7 +712,7 @@ function JobDetail() {
                   minRows={3}
                   value={completion.notes}
                   onChange={(event) =>
-                    setCompletion((current) => ({ ...current, notes: event.currentTarget.value }))
+                    setCompletion((current) => ({ ...current, notes: safeValue(event) }))
                   }
                 />
                 <Group justify="space-between" wrap="wrap">
@@ -790,7 +790,7 @@ function JobDetail() {
                         placeholder="UTR or cheque number"
                         value={site.reference}
                         onChange={(event) =>
-                          setSite((current) => ({ ...current, reference: event.currentTarget.value }))
+                          setSite((current) => ({ ...current, reference: safeValue(event) }))
                         }
                       />
                       <FileInput
@@ -806,7 +806,7 @@ function JobDetail() {
                         minRows={2}
                         value={site.notes}
                         onChange={(event) =>
-                          setSite((current) => ({ ...current, notes: event.currentTarget.value }))
+                          setSite((current) => ({ ...current, notes: safeValue(event) }))
                         }
                       />
                       <Button

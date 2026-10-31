@@ -29,7 +29,7 @@ import {
   Search,
   Tags,
 } from 'lucide-react';
-import { formatINR, titleCase } from '@/lib/format';
+import { formatINR, safeValue, titleCase } from '@/lib/format';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { EmptyState, LoadingState } from '@/components/States';
@@ -201,7 +201,7 @@ function BarcodeLibrary() {
                 placeholder="Search SKU or product…"
                 leftSection={<Search size={15} />}
                 value={search}
-                onChange={(event) => setSearch(event.currentTarget.value)}
+                onChange={(event) => setSearch(safeValue(event))}
                 w={{ base: 180, sm: 260 }}
                 className="sp-no-print"
               />

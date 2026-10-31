@@ -185,7 +185,7 @@ function LeadsKanban() {
               placeholder="Search reference, name or phone…"
               leftSection={<Search size={15} />}
               value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
+              onChange={(event) => setSearch(event?.target?.value ?? (event?.currentTarget as any)?.value ?? '')}
               w={{ base: '100%', sm: 320 }}
             />
             <Switch
@@ -547,7 +547,10 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             required
             value={values.name}
             error={errors.name}
-            onChange={(event) => update('name', event.currentTarget.value.replace(/[^A-Za-z\s.'-]/g, ''))}
+            onChange={(event) => {
+              const raw = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+              update('name', String(raw).replace(/[^A-Za-z\s.'-]/g, ''));
+            }}
           />
           <TextInput
             label="Phone"
@@ -556,7 +559,10 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             maxLength={10}
             value={values.phone}
             error={errors.phone}
-            onChange={(event) => update('phone', event.currentTarget.value.replace(/\D/g, '').slice(0, 10))}
+            onChange={(event) => {
+              const raw = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+              update('phone', String(raw).replace(/\D/g, '').slice(0, 10));
+            }}
           />
         </SimpleGrid>
         <TextInput
@@ -565,14 +571,14 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
           required
           value={values.address}
           error={errors.address}
-          onChange={(event) => update('address', event.currentTarget.value)}
+          onChange={(event) => update('address', event?.target?.value ?? (event?.currentTarget as any)?.value ?? '')}
         />
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <TextInput
             label="City"
             placeholder="Bengaluru"
             value={values.city}
-            onChange={(event) => update('city', event.currentTarget.value)}
+            onChange={(event) => update('city', event?.target?.value ?? (event?.currentTarget as any)?.value ?? '')}
           />
           <Select
             label="Source"
@@ -606,7 +612,7 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             max={5}
             step="1"
             value={values.requestedKw}
-            onChange={(event) => update('requestedKw', event.currentTarget.value)}
+            onChange={(event) => update('requestedKw', event?.target?.value ?? (event?.currentTarget as any)?.value ?? '')}
           />
           <TextInput
             label="Monthly bill (₹)"
@@ -617,7 +623,10 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             placeholder="4200 (max 10L, no decimals)"
             value={values.monthlyBill}
             error={errors.monthlyBill}
-            onChange={(event) => update('monthlyBill', event.currentTarget.value.replace(/\D/g, ''))}
+            onChange={(event) => {
+              const raw = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+              update('monthlyBill', String(raw).replace(/\D/g, ''));
+            }}
           />
           <TextInput
             label="Roof area (sq ft)"
@@ -627,7 +636,10 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             step="1"
             placeholder="650"
             value={values.roofAreaSqft}
-            onChange={(event) => update('roofAreaSqft', event.currentTarget.value.replace(/\D/g, ''))}
+            onChange={(event) => {
+              const raw = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+              update('roofAreaSqft', String(raw).replace(/\D/g, ''));
+            }}
           />
         </SimpleGrid>
 
@@ -636,7 +648,7 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
           placeholder="Anything the surveyor should know?"
           minRows={3}
           value={values.notes}
-          onChange={(event) => update('notes', event.currentTarget.value)}
+          onChange={(event) => update('notes', event?.target?.value ?? (event?.currentTarget as any)?.value ?? '')}
         />
 
         <Group justify="flex-end">

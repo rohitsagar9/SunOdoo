@@ -45,7 +45,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatDateTime, formatINR, titleCase } from '@/lib/format';
+import { formatDate, formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import type { AuthUser, Ticket } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -397,7 +397,7 @@ function TicketDetail() {
                     minRows={3}
                     value={work.resolution}
                     onChange={(event) =>
-                      setWork((current) => ({ ...current, resolution: event.currentTarget.value }))
+                      setWork((current) => ({ ...current, resolution: safeValue(event) }))
                     }
                   />
                   <Group justify="space-between" wrap="wrap">
@@ -498,7 +498,7 @@ function TicketDetail() {
                   placeholder="Call summary, parts ordered, next visit…"
                   minRows={2}
                   value={note}
-                  onChange={(event) => setNote(event.currentTarget.value)}
+                  onChange={(event) => setNote(safeValue(event))}
                   style={{ flex: 1, minWidth: 240 }}
                 />
                 <Button
@@ -700,7 +700,7 @@ function TicketDetail() {
             placeholder="UTR / cheque number"
             value={payment.reference}
             onChange={(event) =>
-              setPayment((current) => ({ ...current, reference: event.currentTarget.value }))
+              setPayment((current) => ({ ...current, reference: safeValue(event) }))
             }
           />
           <Group justify="flex-end">

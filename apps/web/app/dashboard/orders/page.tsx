@@ -28,7 +28,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatINR, titleCase } from '@/lib/format';
+import { formatDate, formatINR, safeValue, titleCase } from '@/lib/format';
 import type { Order } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
@@ -136,7 +136,7 @@ function OrdersList() {
               placeholder="Search order, customer or phone…"
               leftSection={<Search size={15} />}
               value={search}
-              onChange={(event) => setSearch(event.currentTarget.value)}
+              onChange={(event) => setSearch(safeValue(event))}
               w={{ base: '100%', sm: 340 }}
             />
             <Select

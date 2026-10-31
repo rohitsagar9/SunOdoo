@@ -43,7 +43,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatDateTime, formatINR, titleCase } from '@/lib/format';
+import { formatDate, formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
 import type { Order } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { LoadingState } from '@/components/States';
@@ -408,7 +408,7 @@ function OrderDetail() {
                   placeholder="SN-INV-3K-STK-0001"
                   leftSection={<ScanLine size={15} />}
                   value={serial}
-                  onChange={(event) => setSerial(event.currentTarget.value)}
+                  onChange={(event) => setSerial(safeValue(event))}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && serial.trim().length >= 3) {
                       scanMutation.mutate(serial.trim());

@@ -173,7 +173,10 @@ export default function CustomerPortalPage() {
                 placeholder="10-digit mobile number"
                 leftSection={<Smartphone size={16} />}
                 value={phone}
-                onChange={(event) => setPhone(event.currentTarget.value.replace(/\D/g, '').slice(0, 10))}
+                onChange={(event) => {
+                  const raw = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                  setPhone(String(raw).replace(/\D/g, '').slice(0, 10));
+                }}
                 style={{ flex: 1 }}
                 size="md"
                 aria-label="Registered mobile number"
@@ -609,17 +612,19 @@ export default function CustomerPortalPage() {
               label="Serial number (optional)"
               placeholder="SN-INV-3K-STK-0001"
               value={ticketForm.serialNumber}
-              onChange={(event) =>
-                setTicketForm((current) => ({ ...current, serialNumber: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                setTicketForm((current) => ({ ...current, serialNumber: val }));
+              }}
             />
             <TextInput
               label="Fault code (optional)"
               placeholder="E-03, Wi-Fi, no display…"
               value={ticketForm.faultCode}
-              onChange={(event) =>
-                setTicketForm((current) => ({ ...current, faultCode: event.currentTarget.value }))
-              }
+              onChange={(event) => {
+                const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+                setTicketForm((current) => ({ ...current, faultCode: val }));
+              }}
             />
           </SimpleGrid>
           <Textarea
@@ -628,9 +633,10 @@ export default function CustomerPortalPage() {
             minRows={4}
             required
             value={ticketForm.issue}
-            onChange={(event) =>
-              setTicketForm((current) => ({ ...current, issue: event.currentTarget.value }))
-            }
+            onChange={(event) => {
+              const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
+              setTicketForm((current) => ({ ...current, issue: val }));
+            }}
           />
           <Group justify="flex-end">
             <Button variant="subtle" color="gray" onClick={() => setTicketOpen(false)}>

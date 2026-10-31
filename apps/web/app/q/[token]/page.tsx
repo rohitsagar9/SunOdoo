@@ -43,7 +43,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatDateTime, formatINR, systemLabel, titleCase } from '@/lib/format';
+import { formatDate, formatDateTime, formatINR, safeValue, systemLabel, titleCase } from '@/lib/format';
 import { Logo } from '@/components/Brand';
 import { PaymentQR } from '@/components/PaymentQR';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -565,7 +565,7 @@ export default function PublicQuotePage() {
                         label={method === 'UPI' ? 'UPI UTR / Reference' : 'Bank UTR / Transaction reference'}
                         placeholder="e.g. 429182948192"
                         value={reference}
-                        onChange={(event) => setReference(event.currentTarget.value)}
+                        onChange={(event) => setReference(safeValue(event))}
                       />
                       <FileInput
                         label="Payment proof / screenshot"
@@ -580,7 +580,7 @@ export default function PublicQuotePage() {
                         placeholder="Paid from …"
                         minRows={2}
                         value={notes}
-                        onChange={(event) => setNotes(event.currentTarget.value)}
+                        onChange={(event) => setNotes(safeValue(event))}
                       />
                       <Button
                         color="sun"

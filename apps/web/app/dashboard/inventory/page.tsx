@@ -33,7 +33,7 @@ import {
   Warehouse,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatINR, titleCase } from '@/lib/format';
+import { formatDate, formatINR, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import type { InventorySummaryRow, InventoryUnit } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -324,7 +324,7 @@ function InventoryWorkspace() {
                 placeholder="Search serial number…"
                 leftSection={<Search size={15} />}
                 value={search}
-                onChange={(event) => setSearch(event.currentTarget.value)}
+                onChange={(event) => setSearch(safeValue(event))}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') setSubmittedSearch(search.trim());
                 }}
@@ -490,7 +490,7 @@ function InventoryWorkspace() {
               disabled={Number(form.quantity) > 1}
               value={form.serialNumber}
               onChange={(event) =>
-                setForm((current) => ({ ...current, serialNumber: event.currentTarget.value }))
+                setForm((current) => ({ ...current, serialNumber: safeValue(event) }))
               }
             />
           </SimpleGrid>
@@ -499,7 +499,7 @@ function InventoryWorkspace() {
             placeholder="Main warehouse · Rack A3"
             value={form.warehouseLocation}
             onChange={(event) =>
-              setForm((current) => ({ ...current, warehouseLocation: event.currentTarget.value }))
+              setForm((current) => ({ ...current, warehouseLocation: safeValue(event) }))
             }
           />
           {selectedProduct && (

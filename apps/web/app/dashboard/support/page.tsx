@@ -40,7 +40,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
-import { formatDate, titleCase } from '@/lib/format';
+import { formatDate, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import type { DashboardSupport, SupportLookup, Ticket } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -216,7 +216,7 @@ function SupportDesk() {
                     placeholder="9876543210 · SN-INV-3K-STK-0001 · SP-O-2026-0003"
                     leftSection={<Search size={15} />}
                     value={term}
-                    onChange={(event) => setTerm(event.currentTarget.value)}
+                    onChange={(event) => setTerm(safeValue(event))}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter' && term.trim().length >= 2) setSubmitted(term.trim());
                     }}
@@ -670,7 +670,7 @@ function SupportDesk() {
               required
               value={ticketForm.phone}
               onChange={(event) =>
-                setTicketForm((current) => ({ ...current, phone: event.currentTarget.value }))
+                setTicketForm((current) => ({ ...current, phone: safeValue(event) }))
               }
             />
             <TextInput
@@ -678,7 +678,7 @@ function SupportDesk() {
               placeholder="SN-INV-3K-STK-0001"
               value={ticketForm.serialNumber}
               onChange={(event) =>
-                setTicketForm((current) => ({ ...current, serialNumber: event.currentTarget.value }))
+                setTicketForm((current) => ({ ...current, serialNumber: safeValue(event) }))
               }
             />
           </SimpleGrid>
@@ -688,7 +688,7 @@ function SupportDesk() {
               placeholder="E-03, Wi-Fi, no display…"
               value={ticketForm.faultCode}
               onChange={(event) =>
-                setTicketForm((current) => ({ ...current, faultCode: event.currentTarget.value }))
+                setTicketForm((current) => ({ ...current, faultCode: safeValue(event) }))
               }
             />
             <Select
@@ -708,7 +708,7 @@ function SupportDesk() {
             required
             value={ticketForm.issue}
             onChange={(event) =>
-              setTicketForm((current) => ({ ...current, issue: event.currentTarget.value }))
+              setTicketForm((current) => ({ ...current, issue: safeValue(event) }))
             }
           />
           <Group justify="flex-end">

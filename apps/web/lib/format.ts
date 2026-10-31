@@ -124,3 +124,11 @@ export function toInputDateTime(value?: string | Date | null) {
   if (!value) return '';
   return dayjs(value).format('YYYY-MM-DDTHH:mm');
 }
+
+export function safeValue(event: unknown): string {
+  if (typeof event === 'string') return event;
+  if (!event || typeof event !== 'object') return '';
+  const e = event as { target?: { value?: unknown }; currentTarget?: { value?: unknown } };
+  const val = e.target?.value ?? e.currentTarget?.value;
+  return val !== null && val !== undefined ? String(val) : '';
+}

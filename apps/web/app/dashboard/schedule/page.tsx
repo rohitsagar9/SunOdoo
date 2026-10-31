@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api, apiError } from '@/lib/api';
-import { formatDate, formatTime, titleCase } from '@/lib/format';
+import { formatDate, formatTime, safeValue, titleCase } from '@/lib/format';
 import { useAuth } from '@/lib/auth';
 import type { DashboardTechnician, Job } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
@@ -216,7 +216,7 @@ function Schedule() {
               type="date"
               label="Date"
               value={date}
-              onChange={(event) => setDate(event.currentTarget.value)}
+              onChange={(event) => setDate(safeValue(event))}
               w={{ base: '100%', sm: 190 }}
             />
             <Select

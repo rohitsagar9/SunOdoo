@@ -129,7 +129,8 @@ export function InquiryForm() {
             required
             {...form.getInputProps('name')}
             onChange={(event) => {
-              const val = event.currentTarget.value.replace(/[^A-Za-z\s.'-]/g, '');
+              const raw = event?.target?.value ?? event?.currentTarget?.value ?? (typeof event === 'string' ? event : '') ?? '';
+              const val = String(raw).replace(/[^A-Za-z\s.'-]/g, '');
               form.setFieldValue('name', val);
             }}
           />
@@ -140,7 +141,8 @@ export function InquiryForm() {
             maxLength={10}
             {...form.getInputProps('phone')}
             onChange={(event) => {
-              const val = event.currentTarget.value.replace(/\D/g, '').slice(0, 10);
+              const raw = event?.target?.value ?? event?.currentTarget?.value ?? (typeof event === 'string' ? event : '') ?? '';
+              const val = String(raw).replace(/\D/g, '').slice(0, 10);
               form.setFieldValue('phone', val);
             }}
           />

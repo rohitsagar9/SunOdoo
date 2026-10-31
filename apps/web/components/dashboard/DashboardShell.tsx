@@ -177,6 +177,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }))
     .filter((section) => section.items.length > 0);
 
+  const breadcrumb = (() => {
+    for (const sec of sections) {
+      for (const it of sec.items) {
+        if (isActive(it)) return `${sec.label} / ${it.label}`;
+      }
+    }
+    if (isActive(overview)) return overview.label;
+    return 'ERP Workspace';
+  })();
+
   return (
     <AppShell
       header={{ height: 64 }}
@@ -197,9 +207,15 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <Badge color={meta.color} variant="light" visibleFrom="sm" radius="sm">
               {meta.label}
             </Badge>
+            <Text fz="xs" c="dimmed" visibleFrom="lg" fw={600} style={{ letterSpacing: '0.02em' }}>
+              {breadcrumb}
+            </Text>
           </Group>
 
           <Group gap="sm" wrap="nowrap">
+            <Badge variant="dot" color="teal" size="sm" visibleFrom="lg" style={{ background: 'var(--sp-card-subtle)', borderColor: 'var(--sp-border)', color: 'var(--sp-headings)' }}>
+              Live System
+            </Badge>
             <ThemeToggle />
             <ActionIcon
               variant="subtle"
@@ -275,8 +291,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               leftSection={<overview.icon size={18} />}
               active={isActive(overview)}
               color="sun"
-              variant="light"
-              style={{ borderRadius: 10, fontWeight: 600 }}
+              variant="subtle"
+              style={{
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: 13,
+                background: isActive(overview) ? 'var(--sp-active-menu)' : 'transparent',
+                borderLeft: isActive(overview) ? '3px solid var(--sp-primary)' : '3px solid transparent',
+                color: 'var(--sp-headings)',
+                transition: 'all 120ms ease',
+              }}
             />
             {visibleSections.map((section) => (
               <div key={section.label}>
@@ -302,8 +326,16 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                       leftSection={<item.icon size={18} />}
                       active={isActive(item)}
                       color="sun"
-                      variant="light"
-                      style={{ borderRadius: 10, fontWeight: 600 }}
+                      variant="subtle"
+                      style={{
+                        borderRadius: 8,
+                        fontWeight: 600,
+                        fontSize: 13,
+                        background: isActive(item) ? 'var(--sp-active-menu)' : 'transparent',
+                        borderLeft: isActive(item) ? '3px solid var(--sp-primary)' : '3px solid transparent',
+                        color: 'var(--sp-headings)',
+                        transition: 'all 120ms ease',
+                      }}
                     />
                   ))}
                 </Stack>

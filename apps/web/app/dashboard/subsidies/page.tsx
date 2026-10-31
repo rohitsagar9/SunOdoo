@@ -51,7 +51,7 @@ const statuses = [
 
 export default function SubsidiesPage() {
   return (
-    <RoleGate roles={['DIRECTOR', 'SALES']}>
+    <RoleGate roles={['DIRECTOR']}>
       <SubsidyTracker />
     </RoleGate>
   );

@@ -482,8 +482,12 @@ export default function PublicQuotePage() {
                       </Box>
                     </SimpleGrid>
                     {pendingTotal > 0 && (
-                      <Alert color="yellow" variant="light" radius="md" icon={<Clock3 size={16} />}>
-                        {formatINR(pendingTotal)} is awaiting office verification.
+                      <Alert color="teal" variant="light" radius="md" icon={<Clock3 size={18} />}>
+                        <Text fw={700} fz="sm">Payment proof already submitted & awaiting verification</Text>
+                        <Text fz="xs">
+                          {formatINR(pendingTotal)} is currently pending approval by our accounts team.
+                          Your request is already received.
+                        </Text>
                       </Alert>
                     )}
                   </Stack>
@@ -492,7 +496,7 @@ export default function PublicQuotePage() {
 
               {accepted && (
                 <>
-                  <PaymentQR amount={balance > 0 ? balance : undefined} />
+                  <PaymentQR amount={Math.max(balance - pendingTotal, 0) > 0 ? Math.max(balance - pendingTotal, 0) : balance} />
                   <Paper p="lg" radius="lg" className="sp-soft-card">
                     <Stack gap="sm">
                       <Group gap={6}>
@@ -501,17 +505,51 @@ export default function PublicQuotePage() {
                           Upload payment screenshot
                         </Text>
                       </Group>
+                      {pendingTotal > 0 && (
+                        <Alert color="blue" variant="light" radius="md" p="xs">
+                          <Text fz="xs" fw={600}>
+                            Request already sent for {formatINR(pendingTotal)}. If you made an additional tranche, enter the amount below.
+                          </Text>
+                        </Alert>
+                      )}
                       <Text fz="xs" c="dimmed">
-                        Pay the advance or balance to the UPI ID above, then attach the screenshot.
-                        Our office verifies and marks the order paid.
+                        {method === 'UPI'
+                          ? 'Indian banking rules limit UPI to max ₹1,00,000 per transaction. Pay up to ₹1,00,000 per scan or use Bank Transfer (NEFT/RTGS) for full amounts.'
+                          : 'Transfer to our bank account below, then upload the UTR/counterfoil screenshot.'}
                       </Text>
+
+                      {method === 'BANK_TRANSFER' && (
+                        <Paper p="sm" radius="md" withBorder bg="var(--sp-card-bg, #f8f9fa)">
+                          <Text fz="xs" fw={700} mb={4}>Bank Transfer (NEFT / RTGS / IMPS) Details:</Text>
+                          <SimpleGrid cols={2} spacing="xs">
+                            <div>
+                              <Text fz={10} c="dimmed">Account Name</Text>
+                              <Text fz="xs" fw={600}>SunPower Solutions Pvt Ltd</Text>
+                            </div>
+                            <div>
+                              <Text fz={10} c="dimmed">Bank</Text>
+                              <Text fz="xs" fw={600}>HDFC Bank</Text>
+                            </div>
+                            <div>
+                              <Text fz={10} c="dimmed">Account Number</Text>
+                              <Text fz="xs" fw={700} className="sp-mono">50200088991122</Text>
+                            </div>
+                            <div>
+                              <Text fz={10} c="dimmed">IFSC Code</Text>
+                              <Text fz="xs" fw={700} className="sp-mono">HDFC0000123</Text>
+                            </div>
+                          </SimpleGrid>
+                        </Paper>
+                      )}
+
                       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                         <NumberInput
                           label="Amount paid (₹)"
                           min={1}
-                          max={balance || undefined}
+                          max={method === 'UPI' ? 100000 : (balance || undefined)}
                           thousandSeparator=","
-                          placeholder={String(balance || '')}
+                          description={method === 'UPI' ? 'Max ₹1,00,000 (Bank UPI limit)' : undefined}
+                          placeholder={String(method === 'UPI' ? Math.min(balance, 100000) : balance || '')}
                           value={amount}
                           onChange={setAmount}
                         />
@@ -524,13 +562,13 @@ export default function PublicQuotePage() {
                         />
                       </SimpleGrid>
                       <TextInput
-                        label="UPI / transaction reference"
-                        placeholder="UTR or UPI reference"
+                        label={method === 'UPI' ? 'UPI UTR / Reference' : 'Bank UTR / Transaction reference'}
+                        placeholder="e.g. 429182948192"
                         value={reference}
                         onChange={(event) => setReference(event.currentTarget.value)}
                       />
                       <FileInput
-                        label="Screenshot"
+                        label="Payment proof / screenshot"
                         placeholder="PNG, JPG or PDF"
                         accept="image/png,image/jpeg,image/webp,application/pdf"
                         value={file}
@@ -547,7 +585,7 @@ export default function PublicQuotePage() {
                       <Button
                         color="sun"
                         leftSection={<Wallet size={15} />}
-                        disabled={!file || Number(amount) <= 0}
+                        disabled={!file || Number(amount) <= 0 || (method === 'UPI' && Number(amount) > 100000)}
                         loading={paymentMutation.isPending}
                         onClick={() => paymentMutation.mutate()}
                       >

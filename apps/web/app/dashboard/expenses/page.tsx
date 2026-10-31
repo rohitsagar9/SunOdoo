@@ -55,7 +55,7 @@ const categories = [
 
 export default function ExpensesPage() {
   return (
-    <RoleGate roles={['DIRECTOR', 'SALES']}>
+    <RoleGate roles={['DIRECTOR']}>
       <ExpenseBook />
     </RoleGate>
   );

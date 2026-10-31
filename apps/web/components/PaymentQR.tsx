@@ -15,6 +15,8 @@ export function PaymentQR({
 }) {
   const upiId = process.env.NEXT_PUBLIC_UPI_ID ?? 'sunpower@upi';
   const upiName = process.env.NEXT_PUBLIC_UPI_NAME ?? 'SunPower Solutions';
+  const isAboveUpiLimit = amount !== undefined && amount > 100000;
+  const displayAmount = isAboveUpiLimit ? 100000 : amount;
 
   return (
     <Paper withBorder p={compact ? 'md' : 'lg'} radius="lg" bg="white">
@@ -41,9 +43,17 @@ export function PaymentQR({
           </Text>
         </Stack>
         {amount !== undefined && (
-          <Badge size="lg" color="sun" variant="light">
-            {formatINR(amount)}
-          </Badge>
+          <Stack align="center" gap={4}>
+            <Badge size="lg" color="sun" variant="light">
+              {formatINR(displayAmount ?? 0)}
+              {isAboveUpiLimit && ' (UPI Tranche Limit)'}
+            </Badge>
+            {isAboveUpiLimit && (
+              <Text fz={11} c="orange.8" fw={600} ta="center">
+                NPCI UPI rule: ₹1,00,000 max per transfer. Transfer in ₹1L parts or use NEFT/RTGS.
+              </Text>
+            )}
+          </Stack>
         )}
         <CopyButton value={upiId}>
           {({ copied, copy }) => (

@@ -7,7 +7,7 @@ import { audit } from '../lib/audit.js';
 export const expenseRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/expenses',
-    { preHandler: [app.authenticate, app.authorize('DIRECTOR', 'SALES')] },
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
     async (request) => {
       const query = z
         .object({ from: z.string().optional(), to: z.string().optional() })
@@ -32,7 +32,7 @@ export const expenseRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     '/expenses',
-    { preHandler: [app.authenticate, app.authorize('DIRECTOR', 'SALES')] },
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
     async (request, reply) => {
       const body = z
         .object({
@@ -57,7 +57,7 @@ export const expenseRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     '/subsidies',
-    { preHandler: [app.authenticate, app.authorize('DIRECTOR', 'SALES')] },
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
     async () => {
       return prisma.subsidyRecord.findMany({
         include: {
@@ -71,7 +71,7 @@ export const expenseRoutes: FastifyPluginAsync = async (app) => {
 
   app.patch(
     '/subsidies/:id',
-    { preHandler: [app.authenticate, app.authorize('DIRECTOR', 'SALES')] },
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       const body = z

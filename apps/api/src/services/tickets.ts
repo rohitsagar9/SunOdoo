@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError, notFound } from '../lib/errors.js';
-import { nextTicketNumber } from '../lib/sequence.js';
+import { nextJobNumber, nextTicketNumber } from '../lib/sequence.js';
 import { warrantyStatus } from './warranty.js';
 import { audit } from '../lib/audit.js';
 import type { TicketPriority } from '@prisma/client';
@@ -151,6 +151,39 @@ export async function updateTicket(
             createdById: userId,
           },
         });
+      }
+    }
+
+    if (input.assignedToId) {
+      const technician = await tx.user.findUnique({ where: { id: input.assignedToId } });
+      if (technician && technician.role === 'TECHNICIAN') {
+        const existingJob = await tx.job.findFirst({
+          where: {
+            customerId: current.customerId,
+            type: 'REPAIR',
+            notes: { contains: current.ticketNumber },
+            status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+          },
+        });
+        if (!existingJob) {
+          await tx.job.create({
+            data: {
+              jobNumber: await nextJobNumber(),
+              customerId: current.customerId,
+              orderId: current.orderId ?? undefined,
+              type: 'REPAIR',
+              technicianId: input.assignedToId,
+              scheduledDate: new Date(),
+              scheduledSlot: '09:00 - 12:00',
+              notes: `Repair for Ticket ${current.ticketNumber}: ${current.issue}`,
+            },
+          });
+        } else if (existingJob.technicianId !== input.assignedToId) {
+          await tx.job.update({
+            where: { id: existingJob.id },
+            data: { technicianId: input.assignedToId },
+          });
+        }
       }
     }
 

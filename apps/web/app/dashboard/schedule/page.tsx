@@ -10,6 +10,7 @@ import {
   Grid,
   Group,
   Paper,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -26,6 +27,7 @@ import {
   Clock3,
   Headphones,
   MapPin,
+  Phone,
   RefreshCw,
   SunMedium,
   Wrench,
@@ -62,6 +64,7 @@ function Schedule() {
   const { user } = useAuth();
   const [date, setDate] = useState('');
   const [status, setStatus] = useState('ALL');
+  const [workCategory, setWorkCategory] = useState<'ALL' | 'SALES' | 'SUPPORT'>('ALL');
 
   const query = useQuery({
     queryKey: ['jobs', date, status],
@@ -86,16 +89,46 @@ function Schedule() {
   const jobs = query.data ?? [];
   const todayKey = dayjs().format('YYYY-MM-DD');
 
+  const salesCount = useMemo(
+    () => jobs.filter((j) => j.type === 'SURVEY' || j.type === 'INSTALLATION').length,
+    [jobs],
+  );
+  const supportCount = useMemo(
+    () => jobs.filter((j) => j.type === 'REPAIR' || j.type === 'MAINTENANCE').length,
+    [jobs],
+  );
+
+  const filteredJobs = useMemo(() => {
+    return jobs.filter((job) => {
+      if (workCategory === 'SALES') {
+        return job.type === 'SURVEY' || job.type === 'INSTALLATION';
+      }
+      if (workCategory === 'SUPPORT') {
+        return job.type === 'REPAIR' || job.type === 'MAINTENANCE';
+      }
+      return true;
+    });
+  }, [jobs, workCategory]);
+
   const grouped = useMemo(() => {
     const map = new Map<string, Job[]>();
-    for (const job of jobs) {
+    for (const job of filteredJobs) {
       const key = dayjs(job.scheduledDate).format('YYYY-MM-DD');
       const list = map.get(key) ?? [];
       list.push(job);
       map.set(key, list);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [jobs]);
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dateKey, dayJobs]) => {
+        const sortedDayJobs = [...dayJobs].sort((a, b) => {
+          const slotA = a.scheduledSlot ?? dayjs(a.scheduledDate).format('HH:mm');
+          const slotB = b.scheduledSlot ?? dayjs(b.scheduledDate).format('HH:mm');
+          return slotA.localeCompare(slotB);
+        });
+        return [dateKey, sortedDayJobs] as [string, Job[]];
+      });
+  }, [filteredJobs]);
 
   const jobsToday = jobs.filter(
     (job) => dayjs(job.scheduledDate).format('YYYY-MM-DD') === todayKey,
@@ -162,6 +195,19 @@ function Schedule() {
           color="teal"
         />
       </SimpleGrid>
+
+      <Panel padding="xs">
+        <SegmentedControl
+          fullWidth
+          value={workCategory}
+          onChange={(val) => setWorkCategory(val as 'ALL' | 'SALES' | 'SUPPORT')}
+          data={[
+            { label: `All Jobs (${jobs.length})`, value: 'ALL' },
+            { label: `Sales Work (Surveys & Installs: ${salesCount})`, value: 'SALES' },
+            { label: `Support Work (Repairs & Service: ${supportCount})`, value: 'SUPPORT' },
+          ]}
+        />
+      </Panel>
 
       <Panel padding="md" className="sp-no-print">
         <Group justify="space-between" gap="md" wrap="wrap">
@@ -408,13 +454,17 @@ function JobRow({ job }: { job: Job }) {
               <Text fz="sm" fw={700}>
                 {job.customer.name}
               </Text>
-              <Badge size="xs" variant="light" color={job.type === 'SURVEY' ? 'indigo' : 'ocean'}>
-                {titleCase(job.type)}
+              <Badge
+                size="xs"
+                variant="filled"
+                color={job.type === 'REPAIR' || job.type === 'MAINTENANCE' ? 'orange' : 'grape'}
+              >
+                {job.type === 'REPAIR' || job.type === 'MAINTENANCE' ? 'Support Work' : 'Sales Work'} · {titleCase(job.type)}
               </Badge>
               <StatusBadge status={job.status} size="xs" />
             </Group>
             <Text fz={10} c="dimmed" className="sp-mono">
-              {job.jobNumber} · {job.scheduledSlot ?? formatTime(job.scheduledDate)} ·{' '}
+              {job.jobNumber} · Slot: {job.scheduledSlot ?? formatTime(job.scheduledDate)} ·{' '}
               {job.technician?.name ?? 'Unassigned'}
             </Text>
             <Group gap={5} mt={4} wrap="nowrap">
@@ -432,6 +482,16 @@ function JobRow({ job }: { job: Job }) {
           </div>
         </Group>
         <Group gap="sm" wrap="nowrap">
+          <Button
+            component="a"
+            href={`tel:${job.customer.phone}`}
+            size="compact-sm"
+            variant="light"
+            color="teal"
+            leftSection={<Phone size={13} />}
+          >
+            Call
+          </Button>
           {job.hoursWorked != null && (
             <Badge variant="light" color="teal" size="sm">
               {job.hoursWorked} h logged

@@ -121,8 +121,50 @@ function JobDetail() {
         ...current,
         amount: current.amount || (job.order ? String(job.order.balanceDue) : ''),
       }));
+      if (job.lead?.survey) {
+        setMeasurements({
+          roofDirection: job.lead.survey.roofDirection ?? '',
+          tiltDegrees: job.lead.survey.tiltDegrees != null ? String(job.lead.survey.tiltDegrees) : '',
+          cableDistanceM: job.lead.survey.cableDistanceM != null ? String(job.lead.survey.cableDistanceM) : '',
+          shadowFreeAreaSqft: job.lead.survey.shadowFreeAreaSqft != null ? String(job.lead.survey.shadowFreeAreaSqft) : '',
+          findings: job.lead.survey.findings ?? '',
+        });
+      }
     }
   }, [job?.id]);
+
+  const [measurements, setMeasurements] = useState({
+    roofDirection: '',
+    tiltDegrees: '',
+    cableDistanceM: '',
+    shadowFreeAreaSqft: '',
+    findings: '',
+  });
+
+  const surveyMutation = useMutation({
+    mutationFn: async () => {
+      if (!job?.lead?.survey?.id) return;
+      return (
+        await api.patch(`/surveys/${job.lead.survey.id}`, {
+          roofDirection: measurements.roofDirection || undefined,
+          tiltDegrees: measurements.tiltDegrees ? Number(measurements.tiltDegrees) : undefined,
+          cableDistanceM: measurements.cableDistanceM ? Number(measurements.cableDistanceM) : undefined,
+          shadowFreeAreaSqft: measurements.shadowFreeAreaSqft ? Number(measurements.shadowFreeAreaSqft) : undefined,
+          findings: measurements.findings || undefined,
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Roof measurements recorded',
+        message: 'Tilt angle and site measurements saved.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not save measurements', message: apiError(error), color: 'red' }),
+  });
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ['job', id] });
@@ -471,6 +513,63 @@ function JobDetail() {
                 </Table>
               </ScrollArea>
             </Panel>
+
+            {job.lead?.survey && (
+              <Panel
+                title="Roof site measurements"
+                subtitle="Tilt angle, orientation, and shadow-free area"
+                action={<SunMedium size={16} color="#64748b" />}
+              >
+                <Stack gap="sm">
+                  <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                    <TextInput
+                      label="Roof orientation / direction"
+                      placeholder="e.g. South / South-West"
+                      value={measurements.roofDirection}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, roofDirection: e.currentTarget.value }))}
+                    />
+                    <TextInput
+                      label="Tilt angle (degrees)"
+                      type="number"
+                      placeholder="e.g. 18"
+                      value={measurements.tiltDegrees}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, tiltDegrees: e.currentTarget.value }))}
+                    />
+                    <TextInput
+                      label="Cable distance (m)"
+                      type="number"
+                      placeholder="e.g. 25"
+                      value={measurements.cableDistanceM}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, cableDistanceM: e.currentTarget.value }))}
+                    />
+                    <TextInput
+                      label="Shadow-free area (sq ft)"
+                      type="number"
+                      placeholder="e.g. 500"
+                      value={measurements.shadowFreeAreaSqft}
+                      onChange={(e) => setMeasurements((prev) => ({ ...prev, shadowFreeAreaSqft: e.currentTarget.value }))}
+                    />
+                  </SimpleGrid>
+                  <Textarea
+                    label="Site observations / findings"
+                    placeholder="Rooftop structural integrity, shadow analysis, parapet height..."
+                    minRows={2}
+                    value={measurements.findings}
+                    onChange={(e) => setMeasurements((prev) => ({ ...prev, findings: e.currentTarget.value }))}
+                  />
+                  <Group justify="flex-end">
+                    <Button
+                      variant="light"
+                      color="indigo"
+                      loading={surveyMutation.isPending}
+                      onClick={() => surveyMutation.mutate()}
+                    >
+                      Save site measurements
+                    </Button>
+                  </Group>
+                </Stack>
+              </Panel>
+            )}
 
             <Panel
               title="Roof & installation photos"

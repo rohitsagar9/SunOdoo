@@ -163,7 +163,7 @@ export interface Job {
   orderId?: string | null;
   leadId?: string | null;
   customerId: string;
-  type: 'SURVEY' | 'INSTALLATION' | 'REPAIR';
+  type: 'SURVEY' | 'INSTALLATION' | 'REPAIR' | 'MAINTENANCE';
   status: string;
   technicianId?: string | null;
   scheduledDate: string;

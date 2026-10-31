@@ -7,7 +7,7 @@ import { audit } from '../lib/audit.js';
 export const expenseRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/expenses',
-    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR', 'SALES')] },
     async (request) => {
       const query = z
         .object({ from: z.string().optional(), to: z.string().optional() })
@@ -57,7 +57,7 @@ export const expenseRoutes: FastifyPluginAsync = async (app) => {
 
   app.get(
     '/subsidies',
-    { preHandler: [app.authenticate, app.authorize('DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('DIRECTOR', 'SALES')] },
     async () => {
       return prisma.subsidyRecord.findMany({
         include: {

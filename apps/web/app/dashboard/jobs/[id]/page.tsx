@@ -39,11 +39,13 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  Package,
   PenLine,
   Phone,
   ShieldCheck,
   Signature,
   SunMedium,
+  Truck,
   Upload,
   UserRound,
   Wallet,
@@ -252,20 +254,25 @@ function JobDetail() {
       notifications.show({ title: 'Could not save signature', message: apiError(error), color: 'red' }),
   });
 
+  const isInstallation = job?.type === 'INSTALLATION';
+  const isSurvey = job?.type === 'SURVEY';
+
   const completeMutation = useMutation({
     mutationFn: async () =>
       (
         await api.post(`/jobs/${id}/complete`, {
           completionNotes: completion.notes || undefined,
-          systemSizeKw: completion.systemSizeKw || undefined,
-          testResult: completion.testResult || undefined,
+          systemSizeKw: isInstallation ? completion.systemSizeKw || undefined : undefined,
+          testResult: isInstallation ? completion.testResult || undefined : undefined,
         })
       ).data,
     onSuccess: () => {
       invalidate();
       notifications.show({
-        title: 'Job completed',
-        message: 'The order is marked installed and warranty records are live.',
+        title: isSurvey ? 'Survey assessment submitted' : 'Job completed',
+        message: isSurvey
+          ? 'Roof feasibility recorded. The sales desk can now generate the quotation.'
+          : 'The order is marked installed and warranty records are live.',
         color: 'teal',
       });
     },
@@ -306,10 +313,9 @@ function JobDetail() {
   const photos = job.photos ?? [];
   const openLog = timeLogs.find((log) => !log.clockOut);
   const order = job.order;
-  const isInstallation = job.type === 'INSTALLATION';
   const signatureReady = Boolean(job.signature);
   const photosReady = photos.length > 0;
-  const canComplete = !isInstallation || (signatureReady && photosReady);
+  const canComplete = isSurvey ? true : !isInstallation || (signatureReady && photosReady);
 
   return (
     <>
@@ -386,10 +392,11 @@ function JobDetail() {
             {openLog ? `Clocked in ${formatTime(openLog.clockIn)}` : `${timeLogs.length} time log(s)`}
           </Text>
         </Paper>
+
         <Paper p="md" className="sp-soft-card">
           <Group justify="space-between" mb={4}>
             <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
-              Photos
+              {isSurvey ? 'Site photos' : 'Installation photos'}
             </Text>
             <Camera size={15} color="#64748b" />
           </Group>
@@ -397,37 +404,79 @@ function JobDetail() {
             {photos.length}
           </Text>
           <Text fz={10} c="dimmed">
-            {photosReady ? 'Finished-roof proof attached' : 'At least one required'}
+            {isSurvey
+              ? photos.length > 0
+                ? 'Roof inspection attached'
+                : 'Upload roof photos below'
+              : photosReady
+                ? 'Finished-roof proof attached'
+                : 'At least one required'}
           </Text>
         </Paper>
-        <Paper p="md" className="sp-soft-card">
-          <Group justify="space-between" mb={4}>
-            <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
-              Signature
+
+        {isSurvey ? (
+          <Paper p="md" className="sp-soft-card">
+            <Group justify="space-between" mb={4}>
+              <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+                Feasibility
+              </Text>
+              <ShieldCheck size={15} color={job.lead?.survey?.approved ? '#0f766e' : '#d97706'} />
+            </Group>
+            <Text fz={20} fw={800} c={job.lead?.survey?.approved ? 'teal.7' : 'orange.7'}>
+              {job.lead?.survey?.approved ? 'Approved' : 'Pending'}
             </Text>
-            <Signature size={15} color="#64748b" />
-          </Group>
-          <Text fz={22} fw={800} className="sp-mono">
-            {signatureReady ? 'Signed' : 'Pending'}
-          </Text>
-          <Text fz={10} c="dimmed">
-            {job.signature ? job.signature.signerName : 'Customer sign-off required'}
-          </Text>
-        </Paper>
-        <Paper p="md" className="sp-soft-card">
-          <Group justify="space-between" mb={4}>
-            <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
-              Balance
+            <Text fz={10} c="dimmed">
+              {job.lead?.survey?.approved ? 'Roof feasible for solar' : 'Feasibility sign-off needed'}
             </Text>
-            <Wallet size={15} color="#d97706" />
-          </Group>
-          <Text fz={22} fw={800} className="sp-mono">
-            {order ? formatINR(order.balanceDue) : '—'}
-          </Text>
-          <Text fz={10} c="dimmed">
-            {order ? `of ${formatINR(order.total)}` : 'No order linked'}
-          </Text>
-        </Paper>
+          </Paper>
+        ) : (
+          <Paper p="md" className="sp-soft-card">
+            <Group justify="space-between" mb={4}>
+              <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+                Signature
+              </Text>
+              <Signature size={15} color="#64748b" />
+            </Group>
+            <Text fz={22} fw={800} className="sp-mono">
+              {signatureReady ? 'Signed' : 'Pending'}
+            </Text>
+            <Text fz={10} c="dimmed">
+              {job.signature ? job.signature.signerName : 'Customer sign-off required'}
+            </Text>
+          </Paper>
+        )}
+
+        {isSurvey ? (
+          <Paper p="md" className="sp-soft-card">
+            <Group justify="space-between" mb={4}>
+              <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+                System requirement
+              </Text>
+              <SunMedium size={15} color="#783cf6" />
+            </Group>
+            <Text fz={20} fw={800} className="sp-mono">
+              {job.lead?.requestedKw ?? 3} kW
+            </Text>
+            <Text fz={10} c="dimmed">
+              {job.lead ? titleCase(job.lead.systemType) : 'Site assessment'}
+            </Text>
+          </Paper>
+        ) : (
+          <Paper p="md" className="sp-soft-card">
+            <Group justify="space-between" mb={4}>
+              <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+                Balance
+              </Text>
+              <Wallet size={15} color="#d97706" />
+            </Group>
+            <Text fz={22} fw={800} className="sp-mono">
+              {order ? formatINR(order.balanceDue) : '—'}
+            </Text>
+            <Text fz={10} c="dimmed">
+              {order ? `of ${formatINR(order.total)}` : 'No order linked'}
+            </Text>
+          </Paper>
+        )}
       </SimpleGrid>
 
       <Grid gap="md">
@@ -653,122 +702,160 @@ function JobDetail() {
               )}
             </Panel>
 
-            <Panel
-              title="Customer signature"
-              subtitle="The sign-off is stored against the job and shown on the order"
-              action={<PenLine size={16} color="#64748b" />}
-            >
-              {job.signature ? (
-                <Stack gap="sm">
-                  <Alert color="teal" variant="light" radius="md" icon={<CheckCircle2 size={16} />}>
-                    Signed by <b>{job.signature.signerName}</b> on{' '}
-                    {formatDateTime(job.signature.signedAt)}.
-                  </Alert>
-                  <Image
-                    src={assetUrl(job.signature.dataUrl)}
-                    alt="Customer signature"
-                    radius="md"
-                    maw={360}
-                    style={{ border: '1px solid #e2e8f0', background: '#fff' }}
-                  />
-                </Stack>
-              ) : canWork ? (
-                <Stack gap="sm">
-                  <TextInput
-                    label="Signer name"
-                    value={signerName}
-                    onChange={(event) => setSignerName(safeValue(event))}
-                  />
-                  <SignaturePad onChange={setSignatureData} />
-                  <Group justify="flex-end">
-                    <Button
-                      color="sun"
-                      leftSection={<Signature size={15} />}
-                      disabled={!signatureData || signerName.trim().length < 2}
-                      loading={signatureMutation.isPending}
-                      onClick={() => signatureMutation.mutate()}
-                    >
-                      Save signature
-                    </Button>
-                  </Group>
-                </Stack>
-              ) : (
-                <Text fz="sm" c="dimmed">
-                  The technician captures the customer signature on site.
-                </Text>
-              )}
-            </Panel>
+            {isInstallation && (
+              <Panel
+                title="Customer signature"
+                subtitle="The sign-off is stored against the job and shown on the order"
+                action={<PenLine size={16} color="#64748b" />}
+              >
+                {job.signature ? (
+                  <Stack gap="sm">
+                    <Alert color="teal" variant="light" radius="md" icon={<CheckCircle2 size={16} />}>
+                      Signed by <b>{job.signature.signerName}</b> on{' '}
+                      {formatDateTime(job.signature.signedAt)}.
+                    </Alert>
+                    <Image
+                      src={assetUrl(job.signature.dataUrl)}
+                      alt="Customer signature"
+                      radius="md"
+                      maw={360}
+                      style={{ border: '1px solid #e2e8f0', background: '#fff' }}
+                    />
+                  </Stack>
+                ) : canWork ? (
+                  <Stack gap="sm">
+                    <TextInput
+                      label="Signer name"
+                      value={signerName}
+                      onChange={(event) => setSignerName(safeValue(event))}
+                    />
+                    <SignaturePad onChange={setSignatureData} />
+                    <Group justify="flex-end">
+                      <Button
+                        color="sun"
+                        leftSection={<Signature size={15} />}
+                        disabled={!signatureData || signerName.trim().length < 2}
+                        loading={signatureMutation.isPending}
+                        onClick={() => signatureMutation.mutate()}
+                      >
+                        Save signature
+                      </Button>
+                    </Group>
+                  </Stack>
+                ) : (
+                  <Text fz="sm" c="dimmed">
+                    The technician captures the customer signature on site.
+                  </Text>
+                )}
+              </Panel>
+            )}
 
-            <Panel
-              title="Complete job"
-              subtitle="Completion flips the order to installed and starts warranty"
-              action={<CheckCircle2 size={16} color="#0f766e" />}
-            >
-              <Stack gap="md">
-                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                  <NumberInput
-                    label="Installed system size (kW)"
-                    min={0.5}
-                    max={20}
-                    decimalScale={1}
-                    value={completion.systemSizeKw}
-                    onChange={(value) =>
-                      setCompletion((current) => ({ ...current, systemSizeKw: String(value) }))
-                    }
-                  />
-                  <TextInput
-                    label="Commissioning test"
-                    placeholder="Generation normal, earthing OK"
-                    value={completion.testResult}
+            {isSurvey ? (
+              <Panel
+                title="Complete survey & feasibility"
+                subtitle="Submitting this assessment confirms roof feasibility and enables the sales desk to issue quotation"
+                action={<CheckCircle2 size={16} color="#0f766e" />}
+              >
+                <Stack gap="md">
+                  <Textarea
+                    label="Survey assessment & roof structural observations"
+                    placeholder="Describe roof structural stability, shadow obstacles, parapet conditions, cable entry route..."
+                    minRows={3}
+                    value={completion.notes}
                     onChange={(event) =>
-                      setCompletion((current) => ({ ...current, testResult: safeValue(event) }))
+                      setCompletion((current) => ({ ...current, notes: safeValue(event) }))
                     }
                   />
-                </SimpleGrid>
-                <Textarea
-                  label="Completion notes"
-                  placeholder="Work completed, handover notes, net-metering status…"
-                  minRows={3}
-                  value={completion.notes}
-                  onChange={(event) =>
-                    setCompletion((current) => ({ ...current, notes: safeValue(event) }))
-                  }
-                />
-                <Group justify="space-between" wrap="wrap">
-                  <Group gap="lg">
-                    <Group gap={6}>
-                      <CheckCircle2 size={14} color={photosReady ? '#0f766e' : '#94a3b8'} />
-                      <Text fz={11} c={photosReady ? 'teal.7' : 'dimmed'}>
-                        Photos
-                      </Text>
-                    </Group>
-                    <Group gap={6}>
-                      <Signature size={14} color={signatureReady ? '#0f766e' : '#94a3b8'} />
-                      <Text fz={11} c={signatureReady ? 'teal.7' : 'dimmed'}>
-                        Signature
-                      </Text>
-                    </Group>
+                  <Group justify="space-between" wrap="wrap">
+                    <Badge color={job.lead?.survey?.approved ? 'teal' : 'yellow'} variant="light" size="md">
+                      {job.lead?.survey?.approved ? 'Feasibility: Approved' : 'Feasibility: Pending Sign-off'}
+                    </Badge>
+                    {canWork && (
+                      <Button
+                        color="teal"
+                        leftSection={<CheckCircle2 size={15} />}
+                        disabled={job.status === 'COMPLETED'}
+                        loading={completeMutation.isPending}
+                        onClick={() => completeMutation.mutate()}
+                      >
+                        {job.status === 'COMPLETED' ? 'Survey completed' : 'Complete survey & submit feasibility'}
+                      </Button>
+                    )}
                   </Group>
-                  {canWork ? (
-                    <Button
-                      color="teal"
-                      leftSection={<CheckCircle2 size={15} />}
-                      disabled={!canComplete || job.status === 'COMPLETED'}
-                      loading={completeMutation.isPending}
-                      onClick={() => completeMutation.mutate()}
-                    >
-                      {job.status === 'COMPLETED' ? 'Job completed' : 'Complete job'}
-                    </Button>
-                  ) : (
-                    <Text fz="xs" c="dimmed">
-                      Technician or director sign-off required.
-                    </Text>
-                  )}
-                </Group>
-              </Stack>
-            </Panel>
+                </Stack>
+              </Panel>
+            ) : (
+              <Panel
+                title="Complete installation"
+                subtitle="Completion flips the order to installed and starts warranty"
+                action={<CheckCircle2 size={16} color="#0f766e" />}
+              >
+                <Stack gap="md">
+                  <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                    <NumberInput
+                      label="Installed system size (kW)"
+                      min={0.5}
+                      max={20}
+                      decimalScale={1}
+                      value={completion.systemSizeKw}
+                      onChange={(value) =>
+                        setCompletion((current) => ({ ...current, systemSizeKw: String(value) }))
+                      }
+                    />
+                    <TextInput
+                      label="Commissioning test"
+                      placeholder="Generation normal, earthing OK"
+                      value={completion.testResult}
+                      onChange={(event) =>
+                        setCompletion((current) => ({ ...current, testResult: safeValue(event) }))
+                      }
+                    />
+                  </SimpleGrid>
+                  <Textarea
+                    label="Completion notes"
+                    placeholder="Work completed, handover notes, net-metering status…"
+                    minRows={3}
+                    value={completion.notes}
+                    onChange={(event) =>
+                      setCompletion((current) => ({ ...current, notes: safeValue(event) }))
+                    }
+                  />
+                  <Group justify="space-between" wrap="wrap">
+                    <Group gap="lg">
+                      <Group gap={6}>
+                        <CheckCircle2 size={14} color={photosReady ? '#0f766e' : '#94a3b8'} />
+                        <Text fz={11} c={photosReady ? 'teal.7' : 'dimmed'}>
+                          Photos
+                        </Text>
+                      </Group>
+                      <Group gap={6}>
+                        <Signature size={14} color={signatureReady ? '#0f766e' : '#94a3b8'} />
+                        <Text fz={11} c={signatureReady ? 'teal.7' : 'dimmed'}>
+                          Signature
+                        </Text>
+                      </Group>
+                    </Group>
+                    {canWork ? (
+                      <Button
+                        color="teal"
+                        leftSection={<CheckCircle2 size={15} />}
+                        disabled={!canComplete || job.status === 'COMPLETED'}
+                        loading={completeMutation.isPending}
+                        onClick={() => completeMutation.mutate()}
+                      >
+                        {job.status === 'COMPLETED' ? 'Installation completed' : 'Complete installation & activate warranty'}
+                      </Button>
+                    ) : (
+                      <Text fz="xs" c="dimmed">
+                        Technician or director sign-off required.
+                      </Text>
+                    )}
+                  </Group>
+                </Stack>
+              </Panel>
+            )}
 
-            {order && (
+            {isInstallation && order && (
               <Panel
                 title="Collect site payment"
                 subtitle="UPI QR, cash or transfer. Screenshot goes to the office queue."

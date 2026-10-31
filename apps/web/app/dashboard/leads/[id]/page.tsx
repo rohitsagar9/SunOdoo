@@ -106,7 +106,7 @@ function LeadDetail() {
   });
   const [surveyForm, setSurveyForm] = useState({
     technicianId: '',
-    scheduledAt: '',
+    date: '',
     slot: '09:00 - 12:00',
     notes: '',
   });
@@ -140,16 +140,16 @@ function LeadDetail() {
       notes: lead.notes ?? '',
     });
     setSurveyForm((current) => {
-      let sched = current.scheduledAt;
+      let date = current.date;
       if (lead.survey?.scheduledAt) {
         const d = new Date(lead.survey.scheduledAt);
         if (!isNaN(d.getTime())) {
-          sched = d.toISOString().slice(0, 16);
+          date = d.toISOString().slice(0, 10);
         }
       }
       return {
         technicianId: lead.survey?.technicianId ?? current.technicianId,
-        scheduledAt: sched,
+        date: date || new Date().toISOString().slice(0, 10),
         slot: current.slot,
         notes: lead.survey?.findings ?? '',
       };
@@ -187,7 +187,7 @@ function LeadDetail() {
       notifications.show({ title: 'Could not save', message: apiError(error), color: 'red' }),
   });
 
-  const dateStr = surveyForm.scheduledAt ? surveyForm.scheduledAt.slice(0, 10) : '';
+  const dateStr = surveyForm.date || '';
   const isDateValid = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
 
   const jobsQuery = useQuery({
@@ -213,15 +213,18 @@ function LeadDetail() {
   }, [jobsQuery.data, id]);
 
   const surveyMutation = useMutation({
-    mutationFn: async () =>
-      (
+    mutationFn: async () => {
+      const slotStart = surveyForm.slot.split(' - ')[0] || '09:00';
+      const scheduledAt = `${surveyForm.date}T${slotStart}:00`;
+      return (
         await api.post(`/leads/${id}/survey`, {
           technicianId: surveyForm.technicianId,
-          scheduledAt: surveyForm.scheduledAt,
+          scheduledAt,
           slot: surveyForm.slot || undefined,
           notes: surveyForm.notes || undefined,
         })
-      ).data,
+      ).data;
+    },
     onSuccess: () => {
       invalidate();
       notifications.show({
@@ -483,16 +486,17 @@ function LeadDetail() {
                       }
                     />
                     <TextInput
-                      label="Date & time"
-                      type="datetime-local"
-                      value={surveyForm.scheduledAt}
+                      label="Survey date"
+                      type="date"
+                      required
+                      value={surveyForm.date}
                       onChange={(event) => {
                         const val = event?.target?.value ?? (event?.currentTarget as any)?.value ?? '';
-                        setSurveyForm((current) => ({ ...current, scheduledAt: val }));
+                        setSurveyForm((current) => ({ ...current, date: val }));
                       }}
                     />
                     <Select
-                      label="Slot"
+                      label="Time slot"
                       placeholder="Select slot"
                       data={STANDARD_SLOTS.map((slot) => {
                         const occupied = occupiedSlots.includes(slot);
@@ -523,7 +527,7 @@ function LeadDetail() {
                     <Button
                       leftSection={<CalendarPlus size={15} />}
                       color="sun"
-                      disabled={!surveyForm.technicianId || !surveyForm.scheduledAt || !surveyForm.slot || occupiedSlots.includes(surveyForm.slot)}
+                      disabled={!surveyForm.technicianId || !surveyForm.date || !surveyForm.slot || occupiedSlots.includes(surveyForm.slot)}
                       loading={surveyMutation.isPending}
                       onClick={() => surveyMutation.mutate()}
                     >

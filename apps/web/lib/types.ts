@@ -177,7 +177,7 @@ export interface Job {
   customer: Customer;
   technician?: { id: string; name: string; phone?: string | null } | null;
   order?: Order | null;
-  lead?: { id: string; reference?: string; survey?: Survey | null } | null;
+  lead?: { id: string; reference?: string; requestedKw?: number; systemType?: string; survey?: Survey | null } | null;
   photos?: JobPhoto[];
   signature?: JobSignature | null;
   timeLogs?: TimeLog[];

@@ -215,6 +215,31 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(422, 'Choose a valid technician', 'INVALID_TECHNICIAN');
       }
 
+      // Check if the technician already has an active job in the requested slot on that date
+      if (body.slot) {
+        const targetDate = new Date(body.scheduledAt);
+        const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+        const dayEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+
+        const slotConflict = await prisma.job.findFirst({
+          where: {
+            technicianId: body.technicianId,
+            scheduledDate: { gte: dayStart, lte: dayEnd },
+            scheduledSlot: body.slot,
+            status: { notIn: ['CANCELLED', 'COMPLETED'] },
+            leadId: { not: id },
+          },
+        });
+
+        if (slotConflict) {
+          throw new AppError(
+            409,
+            `Technician ${technician.name} is already occupied for the slot "${body.slot}" on this date. Please select another slot or technician.`,
+            'SLOT_OCCUPIED',
+          );
+        }
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         const survey = await tx.survey.upsert({
           where: { leadId: id },
@@ -282,6 +307,7 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
           shadowFreeAreaSqft: z.coerce.number().int().min(0).max(100000).optional(),
           findings: z.string().max(3000).optional(),
           approved: z.boolean().optional(),
+          rejectionReasons: z.array(z.string()).optional(),
           technicianId: z.string().optional(),
         })
         .parse(request.body);
@@ -289,20 +315,32 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       const survey = await prisma.survey.findUnique({ where: { id }, include: { lead: true } });
       if (!survey) throw notFound('Survey');
 
+      let combinedFindings = body.findings;
+      if (body.approved === false && body.rejectionReasons && body.rejectionReasons.length > 0) {
+        const reasonTag = `[DISAPPROVED - INFEASIBLE: ${body.rejectionReasons.join(', ')}]`;
+        combinedFindings = body.findings ? `${reasonTag} ${body.findings}` : reasonTag;
+      }
+
       const updated = await prisma.$transaction(async (tx) => {
         const result = await tx.survey.update({
           where: { id },
           data: {
-            ...body,
+            roofDirection: body.roofDirection,
+            tiltDegrees: body.tiltDegrees,
+            cableDistanceM: body.cableDistanceM,
+            shadowFreeAreaSqft: body.shadowFreeAreaSqft,
+            approved: body.approved ?? survey.approved,
+            findings: combinedFindings ?? survey.findings,
+            technicianId: body.technicianId ?? survey.technicianId,
             completedAt:
-              body.roofDirection || body.tiltDegrees || body.cableDistanceM
+              body.roofDirection || body.tiltDegrees || body.cableDistanceM || body.approved !== undefined
                 ? new Date()
                 : survey.completedAt,
           },
           include: { technician: { select: { id: true, name: true } }, lead: true },
         });
 
-        if (body.approved) {
+        if (body.approved === true) {
           await tx.lead.update({
             where: { id: survey.leadId },
             data: { status: 'SURVEY_COMPLETED' },
@@ -313,7 +351,18 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
           if (surveyJob) {
             await tx.job.update({
               where: { id: surveyJob.id },
-              data: { status: 'COMPLETED', completedAt: new Date(), completionNotes: body.findings },
+              data: { status: 'COMPLETED', completedAt: new Date(), completionNotes: combinedFindings },
+            });
+          }
+        } else if (body.approved === false) {
+          // If technician disagrees / rejects feasibility
+          const surveyJob = await tx.job.findFirst({
+            where: { leadId: survey.leadId, type: 'SURVEY' },
+          });
+          if (surveyJob) {
+            await tx.job.update({
+              where: { id: surveyJob.id },
+              data: { completionNotes: combinedFindings },
             });
           }
         }

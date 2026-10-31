@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Alert,
   Badge,
   Button,
+  Checkbox,
   Divider,
+  FileInput,
   Grid,
   Group,
   Modal,
@@ -28,6 +30,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   CalendarPlus,
+  Camera,
   CheckCircle2,
   ClipboardCheck,
   FilePlus2,
@@ -51,6 +54,20 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { LoadingState } from '@/components/States';
 import { InlineStat, Panel } from '@/components/dashboard/Panel';
 import { RoleGate } from '@/components/dashboard/RoleGate';
+
+const STANDARD_SLOTS = [
+  '09:00 - 12:00',
+  '13:00 - 16:00',
+  '16:00 - 19:00',
+];
+
+const REJECTION_REASONS = [
+  'Insufficient shadow-free roof area',
+  'Structural weakness / damaged roof structure',
+  'Unsafe roof access / hazardous pitch',
+  'Fragile or asbestos sheet roofing',
+  'Electrical earthing / grid mismatch',
+];
 
 export default function LeadDetailPage() {
   return (
@@ -90,7 +107,7 @@ function LeadDetail() {
   const [surveyForm, setSurveyForm] = useState({
     technicianId: '',
     scheduledAt: '',
-    slot: '09:00 - 13:00',
+    slot: '09:00 - 12:00',
     notes: '',
   });
   const [surveyReport, setSurveyReport] = useState({
@@ -109,6 +126,9 @@ function LeadDetail() {
   });
   const [lostOpen, setLostOpen] = useState(false);
   const [lostReason, setLostReason] = useState('');
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectionReasons, setRejectionReasons] = useState<string[]>([]);
+  const [rejectionNotes, setRejectionNotes] = useState('');
 
   useEffect(() => {
     if (!lead) return;
@@ -160,6 +180,25 @@ function LeadDetail() {
       notifications.show({ title: 'Could not save', message: apiError(error), color: 'red' }),
   });
 
+  const jobsQuery = useQuery({
+    queryKey: ['jobs-for-slot', surveyForm.technicianId, surveyForm.scheduledAt?.slice(0, 10)],
+    enabled: Boolean(surveyForm.technicianId && surveyForm.scheduledAt),
+    queryFn: async () => {
+      const dateStr = surveyForm.scheduledAt.slice(0, 10);
+      const res = await api.get<Array<{ id: string; scheduledSlot?: string; status: string; leadId?: string }>>('/jobs', {
+        params: { technicianId: surveyForm.technicianId, date: dateStr },
+      });
+      return res.data;
+    },
+  });
+
+  const occupiedSlots = useMemo(() => {
+    const jobs = jobsQuery.data ?? [];
+    return jobs
+      .filter((j) => j.status !== 'CANCELLED' && j.status !== 'COMPLETED' && j.leadId !== id && j.scheduledSlot)
+      .map((j) => j.scheduledSlot!);
+  }, [jobsQuery.data, id]);
+
   const surveyMutation = useMutation({
     mutationFn: async () =>
       (
@@ -174,7 +213,7 @@ function LeadDetail() {
       invalidate();
       notifications.show({
         title: 'Survey scheduled',
-        message: 'The technician job has been created and the lead moved forward.',
+        message: 'The technician job has been created and the slot reserved.',
         color: 'teal',
       });
     },
@@ -183,30 +222,32 @@ function LeadDetail() {
   });
 
   const surveyReportMutation = useMutation({
-    mutationFn: async (approve: boolean) => {
+    mutationFn: async (payload: { approve: boolean; reasons?: string[]; notes?: string }) => {
       if (!lead?.survey) throw new Error('No survey');
       const response = await api.patch(`/surveys/${lead.survey.id}`, {
         roofDirection: surveyReport.roofDirection || undefined,
         tiltDegrees: surveyReport.tiltDegrees || undefined,
         cableDistanceM: surveyReport.cableDistanceM || undefined,
         shadowFreeAreaSqft: surveyReport.shadowFreeAreaSqft || undefined,
-        findings: surveyReport.findings || undefined,
-        approved: approve,
+        findings: payload.notes || surveyReport.findings || undefined,
+        approved: payload.approve,
+        rejectionReasons: payload.reasons,
       });
       return response.data as Survey;
     },
-    onSuccess: (_data, approve) => {
+    onSuccess: (_data, vars) => {
       invalidate();
+      setRejectOpen(false);
       notifications.show({
-        title: approve ? 'Survey approved' : 'Survey saved',
-        message: approve
-          ? 'The lead is ready for a quote.'
-          : 'Survey measurements have been recorded.',
-        color: 'teal',
+        title: vars.approve ? 'Survey approved' : 'Roof marked infeasible',
+        message: vars.approve
+          ? 'Survey approved. Quote can now be generated.'
+          : 'Rejection reasons recorded. Quote generation is locked.',
+        color: vars.approve ? 'teal' : 'orange',
       });
     },
     onError: (error) =>
-      notifications.show({ title: 'Could not save survey', message: apiError(error), color: 'red' }),
+      notifications.show({ title: 'Could not update survey', message: apiError(error), color: 'red' }),
   });
 
   const quoteMutation = useMutation({
@@ -432,13 +473,23 @@ function LeadDetail() {
                         setSurveyForm((current) => ({ ...current, scheduledAt: event.currentTarget.value }))
                       }
                     />
-                    <TextInput
+                    <Select
                       label="Slot"
-                      placeholder="09:00 - 13:00"
+                      placeholder="Select slot"
+                      data={STANDARD_SLOTS.map((slot) => {
+                        const occupied = occupiedSlots.includes(slot);
+                        return {
+                          value: slot,
+                          label: occupied ? `${slot} (Occupied · Unavailable)` : `${slot} (Available)`,
+                          disabled: occupied,
+                        };
+                      })}
                       value={surveyForm.slot}
-                      onChange={(event) =>
-                        setSurveyForm((current) => ({ ...current, slot: event.currentTarget.value }))
+                      onChange={(value) =>
+                        setSurveyForm((current) => ({ ...current, slot: value ?? '' }))
                       }
+                      allowDeselect={false}
+                      error={occupiedSlots.includes(surveyForm.slot) ? 'Technician is already booked in this slot' : undefined}
                     />
                     <TextInput
                       label="Visit notes"
@@ -453,7 +504,7 @@ function LeadDetail() {
                     <Button
                       leftSection={<CalendarPlus size={15} />}
                       color="sun"
-                      disabled={!surveyForm.technicianId || !surveyForm.scheduledAt}
+                      disabled={!surveyForm.technicianId || !surveyForm.scheduledAt || !surveyForm.slot || occupiedSlots.includes(surveyForm.slot)}
                       loading={surveyMutation.isPending}
                       onClick={() => surveyMutation.mutate()}
                     >
@@ -478,10 +529,24 @@ function LeadDetail() {
                         </Text>
                       </div>
                     </Group>
-                    <Badge color={survey.approved ? 'teal' : 'yellow'} variant="light">
-                      {survey.approved ? 'Approved' : 'Pending approval'}
+                    <Badge color={survey.approved ? 'teal' : survey.findings?.includes('[DISAPPROVED') ? 'red' : 'yellow'} variant="light">
+                      {survey.approved ? 'Feasibility Approved' : survey.findings?.includes('[DISAPPROVED') ? 'Infeasible / Disapproved' : 'Pending approval'}
                     </Badge>
                   </Group>
+
+                  {survey.findings?.includes('[DISAPPROVED') && (
+                    <Alert color="red" variant="light" title="Roof Survey Disapproved / Infeasible">
+                      <Text fz="xs" mb={4}>
+                        The technician reported that the roof cannot safely support installation.
+                      </Text>
+                      <Text fz="xs" fw={700}>
+                        Reason: {survey.findings}
+                      </Text>
+                      <Text fz={11} c="dimmed" mt={4}>
+                        Sales cannot generate a quote unless feasibility issues are resolved and re-approved.
+                      </Text>
+                    </Alert>
+                  )}
 
                   <Divider />
 
@@ -543,21 +608,31 @@ function LeadDetail() {
                     <Button
                       variant="light"
                       color="gray"
-                      onClick={() => surveyReportMutation.mutate(false)}
+                      onClick={() => surveyReportMutation.mutate({ approve: false })}
                       loading={surveyReportMutation.isPending}
                     >
                       Save measurements
                     </Button>
                     <Group gap="sm">
                       {!survey.approved && (
-                        <Button
-                          color="teal"
-                          leftSection={<ShieldCheck size={15} />}
-                          onClick={() => surveyReportMutation.mutate(true)}
-                          loading={surveyReportMutation.isPending}
-                        >
-                          Approve survey
-                        </Button>
+                        <>
+                          <Button
+                            color="red"
+                            variant="light"
+                            leftSection={<XCircle size={15} />}
+                            onClick={() => setRejectOpen(true)}
+                          >
+                            Disapprove / Infeasible
+                          </Button>
+                          <Button
+                            color="teal"
+                            leftSection={<ShieldCheck size={15} />}
+                            onClick={() => surveyReportMutation.mutate({ approve: true })}
+                            loading={surveyReportMutation.isPending}
+                          >
+                            Approve survey
+                          </Button>
+                        </>
                       )}
                       {survey.approved && (
                         <Button
@@ -737,7 +812,7 @@ function LeadDetail() {
                   <Button
                     color="indigo"
                     leftSection={<Ruler size={15} />}
-                    onClick={() => surveyReportMutation.mutate(true)}
+                    onClick={() => surveyReportMutation.mutate({ approve: true })}
                     loading={surveyReportMutation.isPending}
                   >
                     Approve survey
@@ -880,6 +955,69 @@ function LeadDetail() {
             </Button>
             <Button color="sun" onClick={() => quoteMutation.mutate()} loading={quoteMutation.isPending}>
               Generate quote
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        title="Technician Disapproval: Mark Roof Infeasible"
+        size="md"
+        radius="md"
+      >
+        <Stack gap="md">
+          <Text fz="xs" c="dimmed">
+            If the technician determines the site is infeasible, select the reasons and provide photo evidence. This will inform Sales and lock quote generation.
+          </Text>
+          <Text fz="sm" fw={700}>Select Infeasibility Reasons (check all that apply):</Text>
+          <Stack gap="xs">
+            {REJECTION_REASONS.map((reason) => (
+              <Checkbox
+                key={reason}
+                label={reason}
+                checked={rejectionReasons.includes(reason)}
+                onChange={(e) => {
+                  if (e.currentTarget.checked) {
+                    setRejectionReasons((prev) => [...prev, reason]);
+                  } else {
+                    setRejectionReasons((prev) => prev.filter((r) => r !== reason));
+                  }
+                }}
+              />
+            ))}
+          </Stack>
+          <FileInput
+            label="Site photo of issue"
+            placeholder="Upload proof photo (JPG/PNG)"
+            accept="image/png,image/jpeg,image/webp"
+            leftSection={<Camera size={15} />}
+          />
+          <Textarea
+            label="Technician observations"
+            placeholder="Describe obstruction, shading, structural cracks, etc."
+            minRows={3}
+            value={rejectionNotes}
+            onChange={(e) => setRejectionNotes(e.currentTarget.value)}
+          />
+          <Group justify="flex-end" mt="sm">
+            <Button variant="subtle" color="gray" onClick={() => setRejectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              disabled={rejectionReasons.length === 0}
+              loading={surveyReportMutation.isPending}
+              onClick={() =>
+                surveyReportMutation.mutate({
+                  approve: false,
+                  reasons: rejectionReasons,
+                  notes: rejectionNotes,
+                })
+              }
+            >
+              Submit Disapproval to Sales
             </Button>
           </Group>
         </Stack>

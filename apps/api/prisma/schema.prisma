@@ -115,6 +115,7 @@ enum TicketStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
+  CANCELLED
 }
 
 enum TicketPriority {
@@ -207,7 +208,7 @@ model Lead {
   reference    String     @unique
   customerId   String
   source       LeadSource @default(WEB_FORM)
-  requestedKw  Int
+  requestedKw  Float
   systemType   SystemType @default(ON_GRID)
   status       LeadStatus @default(NEW)
   assignedToId String?
@@ -227,6 +228,7 @@ model Lead {
 
   @@index([status])
   @@index([assignedToId])
+  @@index([customerId])
 }
 
 model Survey {
@@ -246,6 +248,8 @@ model Survey {
 
   lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   technician User? @relation(fields: [technicianId], references: [id])
+
+  @@index([technicianId])
 }
 
 model Quote {
@@ -254,7 +258,7 @@ model Quote {
   leadId        String?
   customerId    String
   systemType    SystemType
-  capacityKw    Int
+  capacityKw    Float
   subtotal      Int
   discount      Int         @default(0)
   taxRate       Float       @default(13.8)
@@ -276,6 +280,9 @@ model Quote {
   order    Order?
 
   @@index([status])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([createdById])
 }
 
 model QuoteItem {
@@ -292,6 +299,9 @@ model QuoteItem {
 
   quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
+
+  @@index([quoteId])
+  @@index([productId])
 }
 
 model Product {
@@ -347,6 +357,9 @@ model Order {
   subsidy        SubsidyRecord?
 
   @@index([status])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([approvedById])
 }
 
 model Payment {
@@ -373,6 +386,9 @@ model Payment {
 
   @@index([status])
   @@index([orderId])
+  @@index([ticketId])
+  @@index([submittedById])
+  @@index([approvedById])
 }
 
 model InventoryUnit {
@@ -389,11 +405,13 @@ model InventoryUnit {
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
-  product Product @relation(fields: [productId], references: [id])
-  order   Order?  @relation(fields: [orderId], references: [id])
+  product Product  @relation(fields: [productId], references: [id])
+  order   Order?   @relation(fields: [orderId], references: [id])
+  tickets Ticket[]
 
   @@index([status])
   @@index([productId])
+  @@index([orderId])
 }
 
 model KitItem {
@@ -409,6 +427,7 @@ model KitItem {
   product Product @relation(fields: [productId], references: [id])
 
   @@unique([orderId, productId])
+  @@index([productId])
 }
 
 model Job {
@@ -443,6 +462,8 @@ model Job {
   @@index([status])
   @@index([scheduledDate])
   @@index([technicianId])
+  @@index([customerId])
+  @@index([leadId])
 }
 
 model JobPhoto {
@@ -455,6 +476,9 @@ model JobPhoto {
 
   job        Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
   uploadedBy User? @relation(fields: [uploadedById], references: [id])
+
+  @@index([jobId])
+  @@index([uploadedById])
 }
 
 model JobSignature {
@@ -478,6 +502,9 @@ model TimeLog {
 
   job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
   user User @relation(fields: [userId], references: [id])
+
+  @@index([jobId])
+  @@index([userId])
 }
 
 model Ticket {
@@ -486,6 +513,7 @@ model Ticket {
   customerId          String
   orderId             String?
   productId           String?
+  inventoryUnitId     String?
   serialNumber        String?
   issue               String
   faultCode           String?
@@ -505,16 +533,22 @@ model Ticket {
   closedAt            DateTime?
   customerConfirmedAt DateTime?
 
-  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  order      Order?         @relation(fields: [orderId], references: [id])
-  product    Product?       @relation(fields: [productId], references: [id])
-  assignedTo User?          @relation("TicketAssignee", fields: [assignedToId], references: [id])
-  updates    TicketUpdate[]
-  invoices   Invoice[]
-  payments   Payment[]
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order         Order?         @relation(fields: [orderId], references: [id])
+  product       Product?       @relation(fields: [productId], references: [id])
+  inventoryUnit InventoryUnit? @relation(fields: [inventoryUnitId], references: [id])
+  assignedTo    User?          @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  updates       TicketUpdate[]
+  invoices      Invoice[]
+  payments      Payment[]
 
   @@index([status])
   @@index([serialNumber])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([productId])
+  @@index([inventoryUnitId])
+  @@index([assignedToId])
 }
 
 model TicketUpdate {
@@ -528,6 +562,9 @@ model TicketUpdate {
 
   ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author User?  @relation(fields: [authorId], references: [id])
+
+  @@index([ticketId])
+  @@index([authorId])
 }
 
 model Invoice {
@@ -552,6 +589,9 @@ model Invoice {
   order     Order?   @relation(fields: [orderId], references: [id])
   ticket    Ticket?  @relation(fields: [ticketId], references: [id])
   createdBy User?    @relation("InvoiceCreator", fields: [createdById], references: [id])
+
+  @@index([customerId])
+  @@index([createdById])
 }
 
 model Expense {
@@ -566,6 +606,9 @@ model Expense {
 
   job       Job?  @relation(fields: [jobId], references: [id])
   createdBy User? @relation("ExpenseCreator", fields: [createdById], references: [id])
+
+  @@index([jobId])
+  @@index([createdById])
 }
 
 model SubsidyRecord {
@@ -584,6 +627,8 @@ model SubsidyRecord {
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   order    Order?   @relation(fields: [orderId], references: [id])
+
+  @@index([customerId])
 }
 
 model AuditLog {
@@ -596,4 +641,6 @@ model AuditLog {
   createdAt DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
 }

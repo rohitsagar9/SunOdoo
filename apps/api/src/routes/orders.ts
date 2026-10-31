@@ -192,6 +192,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z.object({ force: z.boolean().optional() }).parse(request.body ?? {});
       const order = await prisma.order.findUnique({
         where: { id },
         include: {
@@ -205,12 +206,12 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       if (['DISPATCHED', 'INSTALLED', 'COMPLETED'].includes(order.status)) {
         throw new AppError(409, 'This order is already dispatched', 'ALREADY_DISPATCHED');
       }
-      if (!['ADVANCE_PAID', 'READY_TO_DISPATCH'].includes(order.status)) {
+      if (!['ADVANCE_PAID', 'READY_TO_DISPATCH'].includes(order.status) && !body.force) {
         throw new AppError(409, 'Approve the customer payment before dispatch', 'PAYMENT_PENDING');
       }
 
       const unpacked = order.kitItems.filter((item) => !item.packed);
-      if (unpacked.length > 0) {
+      if (unpacked.length > 0 && !body.force) {
         throw new AppError(409, 'Complete the packing checklist before dispatch', 'PACKING_INCOMPLETE', {
           items: unpacked.map((item) => item.product.name),
         });
@@ -225,7 +226,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         ).length;
         return scanned < item.quantity;
       });
-      if (missing.length > 0) {
+      if (missing.length > 0 && !body.force) {
         throw new AppError(409, 'Scan every inverter, battery and charge controller before dispatch', 'SERIALS_MISSING', {
           items: missing.map((item) => ({
             product: item.product.name,
@@ -238,9 +239,40 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const now = new Date();
-      const units = order.inventoryUnits.filter((unit) =>
-        ['DISPATCHED', 'INSTALLED'].includes(unit.status),
-      );
+
+      // If force dispatching, automatically mark all unpacked kit items as packed
+      if (body.force && unpacked.length > 0) {
+        await prisma.kitItem.updateMany({
+          where: { orderId: id, packed: false },
+          data: { packed: true, packedAt: now, notes: 'Auto-packed during override dispatch' },
+        });
+      }
+
+      // If force dispatching with missing serials, auto-assign available IN_STOCK units
+      if (body.force && missing.length > 0) {
+        for (const item of missing) {
+          const alreadyAssigned = order.inventoryUnits.filter((u) => u.productId === item.productId).length;
+          const needed = item.quantity - alreadyAssigned;
+          if (needed > 0) {
+            const inStock = await prisma.inventoryUnit.findMany({
+              where: { productId: item.productId, status: 'IN_STOCK', orderId: null },
+              take: needed,
+            });
+            for (const unit of inStock) {
+              await prisma.inventoryUnit.update({
+                where: { id: unit.id },
+                data: { orderId: order.id, status: 'DISPATCHED', dispatchedAt: now },
+              });
+            }
+          }
+        }
+      }
+
+      // Fetch units associated with order for warranty clock initialization
+      const units = await prisma.inventoryUnit.findMany({
+        where: { orderId: id },
+        include: { product: true },
+      });
 
       await prisma.$transaction(async (tx) => {
         await tx.order.update({
@@ -265,15 +297,38 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
             where: { id: order.job.id },
             data: { status: 'SCHEDULED', scheduledDate: order.job.scheduledDate ?? addMonths(now, 0) },
           });
+        } else {
+          const technician = await tx.user.findFirst({
+            where: { role: 'TECHNICIAN', active: true },
+            orderBy: { createdAt: 'asc' },
+          });
+          await tx.job.create({
+            data: {
+              jobNumber: `SP-J-${new Date().getFullYear()}-${String((await tx.job.count()) + 1).padStart(4, '0')}`,
+              orderId: order.id,
+              leadId: order.leadId,
+              customerId: order.customerId,
+              type: 'INSTALLATION',
+              status: 'SCHEDULED',
+              technicianId: technician?.id,
+              scheduledDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+              scheduledSlot: '09:00 - 13:00',
+              notes: `Installation for ${order.customer.name}. Auto-created upon dispatch.`,
+            },
+          });
         }
       });
 
       await audit(request.user.sub, 'ORDER_DISPATCHED', 'Order', id, {
         units: units.length,
         orderNumber: order.orderNumber,
+        force: Boolean(body.force),
       });
 
-      return prisma.order.findUnique({ where: { id }, include: orderInclude });
+      return prisma.order.findUnique({
+        where: { id },
+        include: orderInclude,
+      });
     },
   );
 };

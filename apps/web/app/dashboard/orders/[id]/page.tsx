@@ -13,6 +13,7 @@ import {
   FileInput,
   Grid,
   Group,
+  Modal,
   Paper,
   Progress,
   ScrollArea,
@@ -26,6 +27,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowLeft,
   Banknote,
   Barcode,
@@ -42,6 +44,7 @@ import {
   UserRound,
   Wallet,
   Wrench,
+  XCircle,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -74,6 +77,9 @@ function OrderDetail() {
   const [docFile, setDocFile] = useState<File | null>(null);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [offlineModalOpen, setOfflineModalOpen] = useState(false);
+  const [dispatchWarningOpen, setDispatchWarningOpen] = useState(false);
+  const [overrideConfirm, setOverrideConfirm] = useState(false);
+  const [autoCompleting, setAutoCompleting] = useState(false);
 
   const query = useQuery({
     queryKey: ['order', id],
@@ -131,8 +137,10 @@ function OrderDetail() {
   });
 
   const dispatchMutation = useMutation({
-    mutationFn: async () => (await api.post(`/orders/${id}/dispatch`)).data,
+    mutationFn: async ({ force }: { force?: boolean } = {}) =>
+      (await api.post(`/orders/${id}/dispatch`, { force })).data,
     onSuccess: () => {
+      setDispatchWarningOpen(false);
       invalidate();
       notifications.show({
         title: 'Order dispatched',
@@ -242,6 +250,50 @@ function OrderDetail() {
     }
   };
 
+  const handleDispatchClick = () => {
+    if (readyToDispatch && order.status !== 'PENDING_PAYMENT') {
+      dispatchMutation.mutate({ force: false });
+    } else {
+      setOverrideConfirm(false);
+      setDispatchWarningOpen(true);
+    }
+  };
+
+  const handleAutoCompleteAndDispatch = async () => {
+    setAutoCompleting(true);
+    try {
+      if (packProgress < 100) {
+        await packAllMutation.mutateAsync();
+      }
+
+      // Check and scan missing serials from available in-stock inventory
+      const unscanned = scanRows.filter((r) => !r.done);
+      for (const row of unscanned) {
+        const needed = row.required - row.scanned;
+        if (needed > 0) {
+          const res = await api.get<{ units: Array<{ serialNumber: string }> }>('/inventory', {
+            params: { status: 'IN_STOCK', productId: row.item.productId },
+          });
+          const available = res.data?.units ?? [];
+          for (let i = 0; i < Math.min(needed, available.length); i++) {
+            await scanMutation.mutateAsync(available[i].serialNumber);
+          }
+        }
+      }
+
+      // Force dispatch to ensure completion even if stock was short
+      await dispatchMutation.mutateAsync({ force: true });
+    } catch (err) {
+      notifications.show({
+        title: 'Auto-complete error',
+        message: apiError(err),
+        color: 'orange',
+      });
+    } finally {
+      setAutoCompleting(false);
+    }
+  };
+
   return (
     <>
       <Group justify="space-between" align="flex-start" mb="lg" wrap="wrap">
@@ -289,11 +341,11 @@ function OrderDetail() {
           </Button>
           {!dispatched && (
             <Button
-              color="sun"
+              color={readyToDispatch && order.status !== 'PENDING_PAYMENT' ? 'sun' : 'orange'}
+              variant={readyToDispatch && order.status !== 'PENDING_PAYMENT' ? 'filled' : 'light'}
               leftSection={<Truck size={15} />}
               loading={dispatchMutation.isPending}
-              onClick={() => dispatchMutation.mutate()}
-              disabled={!readyToDispatch}
+              onClick={handleDispatchClick}
             >
               Dispatch order
             </Button>
@@ -593,18 +645,29 @@ function OrderDetail() {
                 </Group>
               </SimpleGrid>
               <Group justify="space-between" mt="md" wrap="wrap">
-                <Text fz="xs" c="dimmed">
-                  {readyToDispatch
-                    ? 'Ready. Dispatch starts warranty and releases the installation job.'
-                    : 'Complete both gates to unlock dispatch.'}
-                </Text>
+                <Group gap="xs">
+                  {readyToDispatch && order.status !== 'PENDING_PAYMENT' ? (
+                    <ThemeIcon size={20} radius="xl" color="teal" variant="light">
+                      <CheckCircle2 size={13} />
+                    </ThemeIcon>
+                  ) : (
+                    <ThemeIcon size={20} radius="xl" color="orange" variant="light">
+                      <AlertTriangle size={13} />
+                    </ThemeIcon>
+                  )}
+                  <Text fz="xs" c={readyToDispatch && order.status !== 'PENDING_PAYMENT' ? 'teal.8' : 'orange.8'} fw={500}>
+                    {readyToDispatch && order.status !== 'PENDING_PAYMENT'
+                      ? 'Ready. Dispatch starts warranty and releases the installation job.'
+                      : 'Dispatch unlocked. Incomplete gates will display review and override options.'}
+                  </Text>
+                </Group>
                 {!dispatched ? (
                   <Button
-                    color="sun"
+                    color={readyToDispatch && order.status !== 'PENDING_PAYMENT' ? 'sun' : 'orange'}
+                    variant={readyToDispatch && order.status !== 'PENDING_PAYMENT' ? 'filled' : 'light'}
                     leftSection={<Truck size={15} />}
-                    disabled={!readyToDispatch}
                     loading={dispatchMutation.isPending}
-                    onClick={() => dispatchMutation.mutate()}
+                    onClick={handleDispatchClick}
                   >
                     Dispatch order
                   </Button>
@@ -790,6 +853,168 @@ function OrderDetail() {
           invalidate();
         }}
       />
+
+      <Modal
+        opened={dispatchWarningOpen}
+        onClose={() => setDispatchWarningOpen(false)}
+        title={
+          <Group gap="xs">
+            <ThemeIcon size={28} radius="md" color="orange" variant="light">
+              <AlertTriangle size={16} />
+            </ThemeIcon>
+            <div>
+              <Text fw={700} fz="md">
+                Dispatch Verification Warnings
+              </Text>
+              <Text fz={11} c="dimmed">
+                Review incomplete gates for {order.orderNumber}
+              </Text>
+            </div>
+          </Group>
+        }
+        size="lg"
+        centered
+      >
+        <Stack gap="md">
+          <Alert color="orange" variant="light" icon={<AlertTriangle size={16} />}>
+            Standard dispatch criteria are not fully verified for this order. Review the status of each requirement below and choose whether to auto-complete or force dispatch.
+          </Alert>
+
+          <Paper p="sm" withBorder radius="md">
+            <Stack gap="xs">
+              <Group justify="space-between" wrap="nowrap">
+                <Group gap="xs">
+                  <ThemeIcon
+                    size={24}
+                    radius="xl"
+                    color={order.status === 'PENDING_PAYMENT' ? 'red' : 'teal'}
+                    variant="light"
+                  >
+                    {order.status === 'PENDING_PAYMENT' ? <XCircle size={14} /> : <CheckCircle2 size={14} />}
+                  </ThemeIcon>
+                  <div>
+                    <Text fz="xs" fw={700}>
+                      Advance Payment
+                    </Text>
+                    <Text fz={11} c="dimmed">
+                      {order.status === 'PENDING_PAYMENT'
+                        ? 'Customer advance payment has not been approved by the office yet.'
+                        : `Advance payment verified (${formatINR(order.advancePaid)} of ${formatINR(order.total)}).`}
+                    </Text>
+                  </div>
+                </Group>
+                <Badge size="xs" color={order.status === 'PENDING_PAYMENT' ? 'red' : 'teal'}>
+                  {order.status === 'PENDING_PAYMENT' ? 'Pending Approval' : 'Verified'}
+                </Badge>
+              </Group>
+
+              <Divider />
+
+              <Group justify="space-between" wrap="nowrap">
+                <Group gap="xs">
+                  <ThemeIcon
+                    size={24}
+                    radius="xl"
+                    color={packProgress === 100 ? 'teal' : 'orange'}
+                    variant="light"
+                  >
+                    {packProgress === 100 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                  </ThemeIcon>
+                  <div>
+                    <Text fz="xs" fw={700}>
+                      Packing Checklist
+                    </Text>
+                    <Text fz={11} c="dimmed">
+                      {packProgress === 100
+                        ? `All ${kitItems.length} checklist items verified and packed.`
+                        : `${kitItems.length - packed} of ${kitItems.length} item(s) not yet checked off in crate.`}
+                    </Text>
+                  </div>
+                </Group>
+                <Badge size="xs" color={packProgress === 100 ? 'teal' : 'orange'}>
+                  {packed}/{kitItems.length} packed
+                </Badge>
+              </Group>
+
+              <Divider />
+
+              <Group justify="space-between" wrap="nowrap">
+                <Group gap="xs">
+                  <ThemeIcon
+                    size={24}
+                    radius="xl"
+                    color={scansReady ? 'teal' : 'orange'}
+                    variant="light"
+                  >
+                    {scansReady ? <ShieldCheck size={14} /> : <AlertTriangle size={14} />}
+                  </ThemeIcon>
+                  <div>
+                    <Text fz="xs" fw={700}>
+                      Mandatory Serial Numbers
+                    </Text>
+                    <Text fz={11} c="dimmed">
+                      {scansReady
+                        ? `All required serialized hardware units (${scans}/${requiredScans}) scanned.`
+                        : `${requiredScans - scans} serialized unit(s) (Inverter/Battery) not yet assigned.`}
+                    </Text>
+                  </div>
+                </Group>
+                <Badge size="xs" color={scansReady ? 'teal' : 'orange'}>
+                  {scans}/{requiredScans} scanned
+                </Badge>
+              </Group>
+            </Stack>
+          </Paper>
+
+          <Paper p="sm" withBorder radius="md" bg="var(--sp-card-muted, #f8fafc)">
+            <Stack gap="xs">
+              <Text fz="xs" fw={700}>
+                Recommended resolution:
+              </Text>
+              <Text fz={11} c="dimmed">
+                Warehouse can automatically mark all kit items packed and auto-assign available in-stock inventory units before dispatching.
+              </Text>
+              <Button
+                variant="light"
+                color="teal"
+                size="sm"
+                leftSection={<PackageCheck size={16} />}
+                loading={autoCompleting}
+                onClick={handleAutoCompleteAndDispatch}
+              >
+                Auto-complete checklist & dispatch
+              </Button>
+            </Stack>
+          </Paper>
+
+          <Divider label="Or force override" labelPosition="center" />
+
+          <Checkbox
+            checked={overrideConfirm}
+            onChange={(e) => setOverrideConfirm(e.currentTarget.checked)}
+            label={
+              <Text fz="xs" fw={600}>
+                I understand the risks of unverified kit/serials and authorize immediate force dispatch.
+              </Text>
+            }
+          />
+
+          <Group justify="space-between" mt="xs">
+            <Button variant="subtle" color="gray" onClick={() => setDispatchWarningOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="orange"
+              leftSection={<Truck size={15} />}
+              disabled={!overrideConfirm}
+              loading={dispatchMutation.isPending}
+              onClick={() => dispatchMutation.mutate({ force: true })}
+            >
+              Force Dispatch (Override Warnings)
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 }

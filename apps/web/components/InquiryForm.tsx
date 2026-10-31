@@ -21,16 +21,26 @@ import { z } from 'zod';
 import { api, apiError } from '@/lib/api';
 
 const schema = z.object({
-  name: z.string().min(2, 'Enter your full name'),
-  phone: z.string().min(10, 'Enter a 10-digit mobile number').max(15),
+  name: z
+    .string()
+    .min(2, 'Enter your full name')
+    .regex(/^[A-Za-z\s.'-]+$/, 'Name should only contain letters and spaces'),
+  phone: z
+    .string()
+    .regex(/^\d{10}$/, 'Enter a valid 10-digit mobile number (numbers only, no decimals)'),
   email: z.string().email('Enter a valid email').optional().or(z.literal('')),
   address: z.string().min(5, 'Enter your installation address'),
   city: z.string().optional(),
   pincode: z.string().max(10).optional(),
   requestedKw: z.number().min(1).max(5),
   systemType: z.enum(['ON_GRID', 'OFF_GRID']),
-  monthlyBill: z.number().min(0).optional(),
-  roofAreaSqft: z.number().min(0).optional(),
+  monthlyBill: z
+    .number()
+    .int('Electricity bill must be a whole number without decimals')
+    .min(0)
+    .max(1000000, 'Electricity bill cannot exceed ₹10,00,000')
+    .optional(),
+  roofAreaSqft: z.number().int().min(0).max(100000).optional(),
   notes: z.string().max(1000).optional(),
 });
 
@@ -113,12 +123,26 @@ export function InquiryForm() {
         )}
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <TextInput label="Full name" placeholder="Ananya Sharma" required {...form.getInputProps('name')} />
+          <TextInput
+            label="Full name"
+            placeholder="Ananya Sharma"
+            required
+            {...form.getInputProps('name')}
+            onChange={(event) => {
+              const val = event.currentTarget.value.replace(/[^A-Za-z\s.'-]/g, '');
+              form.setFieldValue('name', val);
+            }}
+          />
           <TextInput
             label="Mobile number"
-            placeholder="98765 43210"
+            placeholder="9876543210"
             required
+            maxLength={10}
             {...form.getInputProps('phone')}
+            onChange={(event) => {
+              const val = event.currentTarget.value.replace(/\D/g, '').slice(0, 10);
+              form.setFieldValue('phone', val);
+            }}
           />
         </SimpleGrid>
 
@@ -141,6 +165,7 @@ export function InquiryForm() {
             suffix=" kW"
             min={1}
             max={5}
+            allowDecimal={false}
             required
             {...form.getInputProps('requestedKw')}
           />
@@ -160,13 +185,18 @@ export function InquiryForm() {
             label="Monthly electricity bill"
             prefix="₹"
             min={0}
+            max={1000000}
+            allowDecimal={false}
             thousandSeparator=","
+            description="Max ₹10,00,000 (no decimals)"
             {...form.getInputProps('monthlyBill')}
           />
           <NumberInput
             label="Shadow-free roof area"
             suffix=" sq ft"
             min={0}
+            max={100000}
+            allowDecimal={false}
             thousandSeparator=","
             {...form.getInputProps('roofAreaSqft')}
           />

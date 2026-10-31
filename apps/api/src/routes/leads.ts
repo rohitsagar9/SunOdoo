@@ -24,7 +24,7 @@ const createLeadSchema = z.object({
   city: z.string().optional(),
   requestedKw: z.coerce.number().int().min(1).max(5),
   systemType: z.enum(['ON_GRID', 'OFF_GRID']).default('ON_GRID'),
-  monthlyBill: z.coerce.number().int().min(0).optional(),
+  monthlyBill: z.coerce.number().int().min(0).max(1000000).optional(),
   roofAreaSqft: z.coerce.number().int().min(0).optional(),
   notes: z.string().optional(),
   source: z.enum(['WEB_FORM', 'WHATSAPP', 'PHONE', 'WALK_IN']).default('PHONE'),
@@ -34,7 +34,11 @@ const createLeadSchema = z.object({
 const updateLeadSchema = z.object({
   status: z.enum(leadStatuses).optional(),
   assignedToId: z.string().nullable().optional(),
-  monthlyBill: z.coerce.number().int().min(0).optional(),
+  name: z.string().min(2).optional(),
+  phone: z.string().min(10).max(15).optional(),
+  address: z.string().min(5).optional(),
+  city: z.string().optional(),
+  monthlyBill: z.coerce.number().int().min(0).max(1000000).optional(),
   roofAreaSqft: z.coerce.number().int().min(0).optional(),
   notes: z.string().max(3000).optional(),
   lostReason: z.string().max(500).optional(),
@@ -165,9 +169,22 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       const existing = await prisma.lead.findUnique({ where: { id } });
       if (!existing) throw notFound('Lead');
 
+      const { name, phone, address, city, ...leadData } = body;
+      if (name || phone || address || city) {
+        await prisma.customer.update({
+          where: { id: existing.customerId },
+          data: {
+            ...(name ? { name } : {}),
+            ...(phone ? { phone: phone.replace(/\s+/g, '') } : {}),
+            ...(address ? { address } : {}),
+            ...(city ? { city } : {}),
+          },
+        });
+      }
+
       const lead = await prisma.lead.update({
         where: { id },
-        data: body,
+        data: leadData,
         include: { customer: true, assignedTo: true, survey: true },
       });
 

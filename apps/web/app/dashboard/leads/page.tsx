@@ -129,14 +129,22 @@ function LeadsKanban() {
     },
   });
 
+  const [sortOrder, setSortOrder] = useState<'fifo' | 'newest'>('fifo');
+
   const grouped = useMemo(() => {
     const map = new Map<string, Lead[]>();
     for (const column of columns) map.set(column.status, []);
-    for (const lead of query.data ?? []) {
+    const items = [...(query.data ?? [])];
+    items.sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      return sortOrder === 'fifo' ? timeA - timeB : timeB - timeA;
+    });
+    for (const lead of items) {
       map.get(lead.status)?.push(lead);
     }
     return map;
-  }, [query.data]);
+  }, [query.data, sortOrder]);
 
   const totalLeads = query.data?.length ?? 0;
   const totalValue = (query.data ?? []).reduce(
@@ -182,6 +190,17 @@ function LeadsKanban() {
               label="Only my leads"
               checked={mine}
               onChange={(event) => setMine(event.currentTarget.checked)}
+            />
+            <Select
+              size="xs"
+              w={180}
+              value={sortOrder}
+              onChange={(val) => setSortOrder(val === 'newest' ? 'newest' : 'fifo')}
+              data={[
+                { value: 'fifo', label: 'FIFO (Oldest queue first)' },
+                { value: 'newest', label: 'Newest enquiries first' },
+              ]}
+              allowDeselect={false}
             />
             {focusStatus && (
               <Badge
@@ -497,8 +516,20 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
   function submit() {
     const nextErrors: Record<string, string> = {};
     if (values.name.trim().length < 2) nextErrors.name = 'Enter the customer name';
-    if (values.phone.replace(/\D/g, '').length < 10) nextErrors.phone = 'Enter a 10-digit phone number';
+    else if (!/^[A-Za-z\s.'-]+$/.test(values.name.trim())) nextErrors.name = 'Name should only contain letters and spaces';
+
+    const cleanPhone = values.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) nextErrors.phone = 'Enter a valid 10-digit phone number without decimals';
+
     if (values.address.trim().length < 5) nextErrors.address = 'Enter the site address';
+
+    if (values.monthlyBill) {
+      const billNum = Number(values.monthlyBill);
+      if (isNaN(billNum) || billNum < 0) nextErrors.monthlyBill = 'Enter a valid bill amount';
+      else if (billNum > 1000000) nextErrors.monthlyBill = 'Electricity bill cannot exceed ₹10,00,000';
+      else if (String(values.monthlyBill).includes('.')) nextErrors.monthlyBill = 'Bill amount must be a whole number (no decimals)';
+    }
+
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
     mutation.mutate();
@@ -514,15 +545,16 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             required
             value={values.name}
             error={errors.name}
-            onChange={(event) => update('name', event.currentTarget.value)}
+            onChange={(event) => update('name', event.currentTarget.value.replace(/[^A-Za-z\s.'-]/g, ''))}
           />
           <TextInput
             label="Phone"
             placeholder="9876543210"
             required
+            maxLength={10}
             value={values.phone}
             error={errors.phone}
-            onChange={(event) => update('phone', event.currentTarget.value)}
+            onChange={(event) => update('phone', event.currentTarget.value.replace(/\D/g, '').slice(0, 10))}
           />
         </SimpleGrid>
         <TextInput
@@ -570,22 +602,30 @@ function NewLeadModal({ opened, onClose }: { opened: boolean; onClose: () => voi
             type="number"
             min={1}
             max={5}
+            step="1"
             value={values.requestedKw}
             onChange={(event) => update('requestedKw', event.currentTarget.value)}
           />
           <TextInput
             label="Monthly bill (₹)"
             type="number"
-            placeholder="4200"
+            min={0}
+            max={1000000}
+            step="1"
+            placeholder="4200 (max 10L, no decimals)"
             value={values.monthlyBill}
-            onChange={(event) => update('monthlyBill', event.currentTarget.value)}
+            error={errors.monthlyBill}
+            onChange={(event) => update('monthlyBill', event.currentTarget.value.replace(/\D/g, ''))}
           />
           <TextInput
             label="Roof area (sq ft)"
             type="number"
+            min={0}
+            max={100000}
+            step="1"
             placeholder="650"
             value={values.roofAreaSqft}
-            onChange={(event) => update('roofAreaSqft', event.currentTarget.value)}
+            onChange={(event) => update('roofAreaSqft', event.currentTarget.value.replace(/\D/g, ''))}
           />
         </SimpleGrid>
 

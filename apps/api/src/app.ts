@@ -39,7 +39,13 @@ export async function buildApp() {
 
   await app.register(cors, {
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (
+        !origin ||
+        env.nodeEnv !== 'production' ||
+        allowedOrigins.includes(origin) ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
         callback(null, true);
         return;
       }

@@ -326,9 +326,16 @@ function LeadDetail() {
                   <TextInput
                     label="Monthly bill (₹)"
                     type="number"
+                    min={0}
+                    max={1000000}
+                    step="1"
+                    placeholder="Max ₹10,00,000"
                     value={details.monthlyBill}
                     onChange={(event) =>
-                      setDetails((current) => ({ ...current, monthlyBill: event.currentTarget.value }))
+                      setDetails((current) => ({
+                        ...current,
+                        monthlyBill: event.currentTarget.value.replace(/\D/g, '').slice(0, 7),
+                      }))
                     }
                   />
                   <TextInput

@@ -90,6 +90,29 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
         packed: body.packed,
         orderId,
       });
+
+      if (body.packed) {
+        const remainingUnpacked = await prisma.kitItem.count({ where: { orderId, packed: false } });
+        if (remainingUnpacked === 0) {
+          const fullOrder = await prisma.order.findUnique({
+            where: { id: orderId },
+            include: { customer: true, job: { include: { technician: true } } },
+          });
+          if (fullOrder) {
+            await audit(request.user.sub, 'WAREHOUSE_ALERT_TO_SALES', 'Order', orderId, {
+              orderNumber: fullOrder.orderNumber,
+              customerName: fullOrder.customer.name,
+              category: 'KIT_PACKED',
+              message: `Hardware kit for ${fullOrder.orderNumber} (${fullOrder.customer.name}) is fully packed in warehouse. Ready for technician pickup!`,
+              urgent: false,
+              resolved: false,
+              technicianId: fullOrder.job?.technicianId,
+              technicianName: fullOrder.job?.technician?.name,
+            });
+          }
+        }
+      }
+
       return updated;
     },
   );
@@ -99,7 +122,10 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
     { preHandler: [app.authenticate, app.authorize('WAREHOUSE', 'DIRECTOR')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
-      const order = await prisma.order.findUnique({ where: { id }, include: { kitItems: true } });
+      const order = await prisma.order.findUnique({
+        where: { id },
+        include: { kitItems: true, customer: true, job: { include: { technician: true } } },
+      });
       if (!order) throw notFound('Order');
 
       await prisma.kitItem.updateMany({
@@ -108,6 +134,18 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
       });
 
       await audit(request.user.sub, 'KIT_PACKED', 'Order', id, { items: order.kitItems.length });
+
+      await audit(request.user.sub, 'WAREHOUSE_ALERT_TO_SALES', 'Order', id, {
+        orderNumber: order.orderNumber,
+        customerName: order.customer.name,
+        category: 'KIT_PACKED',
+        message: `Hardware kit for ${order.orderNumber} (${order.customer.name}) is fully packed in warehouse. Ready for technician pickup!`,
+        urgent: false,
+        resolved: false,
+        technicianId: order.job?.technicianId,
+        technicianName: order.job?.technician?.name,
+      });
+
       return prisma.order.findUnique({ where: { id }, include: orderInclude });
     },
   );

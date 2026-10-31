@@ -171,13 +171,22 @@ export interface Job {
   clockInAt?: string | null;
   clockOutAt?: string | null;
   hoursWorked?: number | null;
+  pickedUpAt?: string | null;
+  unloadedAt?: string | null;
   notes?: string | null;
   completionNotes?: string | null;
   completedAt?: string | null;
   customer: Customer;
   technician?: { id: string; name: string; phone?: string | null } | null;
   order?: Order | null;
-  lead?: { id: string; reference?: string; requestedKw?: number; systemType?: string; survey?: Survey | null } | null;
+  lead?: {
+    id: string;
+    reference?: string;
+    status?: string;
+    requestedKw?: number;
+    systemType?: string;
+    survey?: Survey | null;
+  } | null;
   photos?: JobPhoto[];
   signature?: JobSignature | null;
   timeLogs?: TimeLog[];
@@ -366,6 +375,16 @@ export interface DashboardTechnician {
   todayJobs: Job[];
   upcoming: Job[];
   tickets: Ticket[];
+  packedAlerts?: Array<{
+    id: string;
+    orderId?: string | null;
+    orderNumber?: string | null;
+    customerName?: string | null;
+    category: string;
+    message: string;
+    urgent: boolean;
+    createdAt: string;
+  }>;
 }
 
 export interface DashboardWarehouse {
@@ -401,6 +420,22 @@ export interface SupportHandoverItem {
   sentBy?: string | null;
   cardCode: string;
   technicianName?: string | null;
+  invoice?: {
+    id: string;
+    invoiceNumber: string;
+    total: number;
+    status: string;
+    createdAt?: string;
+  } | null;
+  warrantyUnits?: Array<{
+    id?: string;
+    serialNumber: string;
+    productName: string;
+    category?: string;
+    warrantyMonths?: number;
+    warrantyEnd?: string | null;
+    warrantyExpiresAt?: string | null;
+  }>;
 }
 
 export interface DashboardSupport {

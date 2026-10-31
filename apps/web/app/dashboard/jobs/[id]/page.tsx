@@ -99,6 +99,9 @@ function JobDetail() {
   const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
   const [signerName, setSignerName] = useState('');
   const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('Severe shading from trees / tall neighboring buildings');
+  const [rejectNotes, setRejectNotes] = useState('');
   const [completion, setCompletion] = useState({
     notes: '',
     systemSizeKw: '',
@@ -281,6 +284,54 @@ function JobDetail() {
   const isInstallation = job?.type === 'INSTALLATION';
   const isSurvey = job?.type === 'SURVEY';
 
+  const pickupMutation = useMutation({
+    mutationFn: async () => (await api.post(`/jobs/${id}/pickup`)).data,
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Hardware Kit Picked Up',
+        message: 'Order status updated to DISPATCHED. Proceed to installation site.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not mark kit picked up', message: apiError(error), color: 'red' }),
+  });
+
+  const unloadMutation = useMutation({
+    mutationFn: async () => (await api.post(`/jobs/${id}/unload`)).data,
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Hardware Kit Unloaded at Site',
+        message: 'Equipment confirmed on site. Proceed with installation, photos and signature.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not mark kit unloaded', message: apiError(error), color: 'red' }),
+  });
+
+  const rejectFeasibilityMutation = useMutation({
+    mutationFn: async () => {
+      const fullReason = rejectNotes.trim()
+        ? `${rejectReason}: ${rejectNotes.trim()}`
+        : rejectReason;
+      return (await api.post(`/jobs/${id}/reject-feasibility`, { reason: fullReason })).data;
+    },
+    onSuccess: () => {
+      invalidate();
+      setRejectModalOpen(false);
+      notifications.show({
+        title: 'Site Marked Not Feasible',
+        message: 'Survey rejected and lead marked as LOST. Sales team notified.',
+        color: 'orange',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not reject feasibility', message: apiError(error), color: 'red' }),
+  });
+
   const completeMutation = useMutation({
     mutationFn: async () =>
       (
@@ -339,7 +390,10 @@ function JobDetail() {
   const order = job.order;
   const signatureReady = Boolean(job.signature);
   const photosReady = photos.length > 0;
-  const canComplete = isSurvey ? true : !isInstallation || (signatureReady && photosReady);
+  const unloadedReady = Boolean(job.unloadedAt);
+  const canComplete = isSurvey
+    ? true
+    : !isInstallation || (signatureReady && photosReady && unloadedReady);
   const isAdvancePending = isInstallation && Boolean(order && order.status === 'PENDING_PAYMENT');
 
   return (
@@ -461,28 +515,74 @@ function JobDetail() {
               <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
                 Feasibility
               </Text>
-              <ShieldCheck size={15} color={job.lead?.survey?.approved ? '#0f766e' : '#d97706'} />
+              <ShieldCheck
+                size={15}
+                color={
+                  job.lead?.survey?.approved
+                    ? '#0f766e'
+                    : job.lead?.status === 'LOST'
+                      ? '#dc2626'
+                      : '#d97706'
+                }
+              />
             </Group>
-            <Text fz={20} fw={800} c={job.lead?.survey?.approved ? 'teal.7' : 'orange.7'}>
-              {job.lead?.survey?.approved ? 'Approved' : 'Pending'}
+            <Text
+              fz={20}
+              fw={800}
+              c={
+                job.lead?.survey?.approved
+                  ? 'teal.7'
+                  : job.lead?.status === 'LOST'
+                    ? 'red.7'
+                    : 'orange.7'
+              }
+            >
+              {job.lead?.survey?.approved
+                ? 'Approved'
+                : job.lead?.status === 'LOST'
+                  ? 'Not Feasible'
+                  : 'Pending'}
             </Text>
             <Text fz={10} c="dimmed">
-              {job.lead?.survey?.approved ? 'Roof feasible for solar' : 'Feasibility sign-off needed'}
+              {job.lead?.survey?.approved
+                ? 'Roof feasible for solar'
+                : job.lead?.status === 'LOST'
+                  ? 'Survey rejected as unfeasible'
+                  : 'Feasibility sign-off needed'}
             </Text>
           </Paper>
         ) : (
           <Paper p="md" className="sp-soft-card">
             <Group justify="space-between" mb={4}>
               <Text fz={10} fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
-                Signature
+                Kit logistics & sign-off
               </Text>
-              <Signature size={15} color="#64748b" />
+              <Truck
+                size={15}
+                color={job.unloadedAt ? '#0f766e' : job.pickedUpAt ? '#2563eb' : '#64748b'}
+              />
             </Group>
-            <Text fz={22} fw={800} className="sp-mono">
-              {signatureReady ? 'Signed' : 'Pending'}
+            <Text
+              fz={18}
+              fw={800}
+              c={job.unloadedAt ? 'teal.7' : job.pickedUpAt ? 'blue.7' : 'orange.7'}
+            >
+              {job.unloadedAt
+                ? signatureReady
+                  ? 'Signed & Unloaded'
+                  : 'Unloaded at Site'
+                : job.pickedUpAt
+                  ? 'In Transit'
+                  : 'Kit in Warehouse'}
             </Text>
             <Text fz={10} c="dimmed">
-              {job.signature ? job.signature.signerName : 'Customer sign-off required'}
+              {job.unloadedAt
+                ? signatureReady
+                  ? `Signed by ${job.signature?.signerName}`
+                  : 'Customer signature pending'
+                : job.pickedUpAt
+                  ? 'Picked up, heading to site'
+                  : 'Awaiting warehouse pickup'}
             </Text>
           </Paper>
         )}
@@ -661,14 +761,37 @@ function JobDetail() {
                     </Text>
                   )}
                   <Group justify="space-between" wrap="wrap">
-                    <Badge color={job.lead?.survey?.approved ? 'teal' : 'yellow'} variant="light">
-                      {job.lead?.survey?.approved ? 'Feasibility Approved' : 'Feasibility Pending Sign-off'}
+                    <Badge
+                      color={
+                        job.lead?.survey?.approved
+                          ? 'teal'
+                          : job.lead?.status === 'LOST'
+                            ? 'red'
+                            : 'yellow'
+                      }
+                      variant="light"
+                    >
+                      {job.lead?.survey?.approved
+                        ? 'Feasibility Approved'
+                        : job.lead?.status === 'LOST'
+                          ? 'Not Feasible (Rejected)'
+                          : 'Feasibility Pending Sign-off'}
                     </Badge>
                     <Group gap="xs">
+                      {canWork && !job.lead?.survey?.approved && job.lead?.status !== 'LOST' && (
+                        <Button
+                          variant="light"
+                          color="red"
+                          leftSection={<ShieldAlert size={14} />}
+                          onClick={() => setRejectModalOpen(true)}
+                        >
+                          Mark Not Feasible
+                        </Button>
+                      )}
                       <Button
                         variant="light"
                         color="indigo"
-                        disabled={!hasAnyMeasurement}
+                        disabled={!hasAnyMeasurement || job.lead?.status === 'LOST'}
                         loading={surveyMutation.isPending}
                         onClick={() => {
                           if (!hasAnyMeasurement) {
@@ -684,7 +807,7 @@ function JobDetail() {
                       >
                         Save measurements
                       </Button>
-                      {!job.lead?.survey?.approved && (
+                      {!job.lead?.survey?.approved && job.lead?.status !== 'LOST' && (
                         <Button
                           color="teal"
                           leftSection={<ShieldCheck size={14} />}
@@ -709,6 +832,106 @@ function JobDetail() {
                     </Group>
                   </Group>
                 </Stack>
+              </Panel>
+            )}
+
+            {isInstallation && (
+              <Panel
+                title="Hardware kit logistics & site unloading"
+                subtitle="Warehouse pickup and on-site unloading flow before installation completion"
+                action={<Truck size={16} color="#64748b" />}
+              >
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+                  <Paper
+                    p="md"
+                    withBorder
+                    style={{
+                      borderColor: job.pickedUpAt ? '#0f766e' : '#f59e0b',
+                      background: job.pickedUpAt ? 'rgba(15, 118, 110, 0.04)' : 'var(--sp-card)',
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Group justify="space-between" mb="xs">
+                      <Group gap="xs">
+                        <ThemeIcon
+                          size={28}
+                          radius="md"
+                          color={job.pickedUpAt ? 'teal' : 'orange'}
+                          variant="light"
+                        >
+                          <Package size={15} />
+                        </ThemeIcon>
+                        <Text fz="xs" fw={700}>
+                          Step 1 · Warehouse Kit Pickup
+                        </Text>
+                      </Group>
+                      <Badge size="xs" color={job.pickedUpAt ? 'teal' : 'yellow'} variant="light">
+                        {job.pickedUpAt ? 'Picked Up' : 'Pending Pickup'}
+                      </Badge>
+                    </Group>
+                    <Text fz={11} c="dimmed" mb="sm">
+                      {job.pickedUpAt
+                        ? `Hardware kit picked up on ${formatDateTime(job.pickedUpAt)}. Status marked DISPATCHED.`
+                        : 'Collect all packed inventory units (panels, inverter, rails, BOS) from warehouse.'}
+                    </Text>
+                    {canWork && !job.pickedUpAt && (
+                      <Button
+                        size="xs"
+                        color="sun"
+                        leftSection={<Package size={13} />}
+                        loading={pickupMutation.isPending}
+                        onClick={() => pickupMutation.mutate()}
+                      >
+                        Mark Picked Up from Warehouse
+                      </Button>
+                    )}
+                  </Paper>
+
+                  <Paper
+                    p="md"
+                    withBorder
+                    style={{
+                      borderColor: job.unloadedAt ? '#0f766e' : '#94a3b8',
+                      background: job.unloadedAt ? 'rgba(15, 118, 110, 0.04)' : 'var(--sp-card)',
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Group justify="space-between" mb="xs">
+                      <Group gap="xs">
+                        <ThemeIcon
+                          size={28}
+                          radius="md"
+                          color={job.unloadedAt ? 'teal' : 'gray'}
+                          variant="light"
+                        >
+                          <Truck size={15} />
+                        </ThemeIcon>
+                        <Text fz="xs" fw={700}>
+                          Step 2 · Unloaded at Customer Site
+                        </Text>
+                      </Group>
+                      <Badge size="xs" color={job.unloadedAt ? 'teal' : 'gray'} variant="light">
+                        {job.unloadedAt ? 'Unloaded' : 'Pending Arrival'}
+                      </Badge>
+                    </Group>
+                    <Text fz={11} c="dimmed" mb="sm">
+                      {job.unloadedAt
+                        ? `Hardware safely unloaded on site at ${formatDateTime(job.unloadedAt)}. Installation ready.`
+                        : 'Confirm physical arrival at customer site and unload components for mounting.'}
+                    </Text>
+                    {canWork && job.pickedUpAt && !job.unloadedAt && (
+                      <Button
+                        size="xs"
+                        color="teal"
+                        leftSection={<Truck size={13} />}
+                        loading={unloadMutation.isPending}
+                        onClick={() => unloadMutation.mutate()}
+                      >
+                        Mark Unloaded at Site
+                      </Button>
+                    )}
+                  </Paper>
+                </SimpleGrid>
               </Panel>
             )}
 
@@ -894,11 +1117,23 @@ function JobDetail() {
                     }
                   />
                   <Group justify="space-between" wrap="wrap">
-                    <Group gap="lg">
+                    <Group gap="md" wrap="wrap">
+                      <Group gap={6}>
+                        <Package size={14} color={job.pickedUpAt ? '#0f766e' : '#94a3b8'} />
+                        <Text fz={11} c={job.pickedUpAt ? 'teal.7' : 'dimmed'}>
+                          Kit Picked Up
+                        </Text>
+                      </Group>
+                      <Group gap={6}>
+                        <Truck size={14} color={job.unloadedAt ? '#0f766e' : '#94a3b8'} />
+                        <Text fz={11} c={job.unloadedAt ? 'teal.7' : 'dimmed'}>
+                          Kit Unloaded
+                        </Text>
+                      </Group>
                       <Group gap={6}>
                         <CheckCircle2 size={14} color={photosReady ? '#0f766e' : '#94a3b8'} />
                         <Text fz={11} c={photosReady ? 'teal.7' : 'dimmed'}>
-                          Photos
+                          Photos ({photos.length})
                         </Text>
                       </Group>
                       <Group gap={6}>
@@ -1173,6 +1408,63 @@ function JobDetail() {
           </Stack>
         </Grid.Col>
       </Grid>
+
+      <Modal
+        opened={rejectModalOpen}
+        onClose={() => setRejectModalOpen(false)}
+        title={
+          <Group gap="xs">
+            <ShieldAlert size={20} color="#dc2626" />
+            <Text fw={700}>Mark Site as Not Feasible</Text>
+          </Group>
+        }
+        size="md"
+      >
+        <Stack gap="md">
+          <Alert color="red" variant="light" radius="md">
+            Marking this survey as not feasible will update the site assessment, change the customer lead status to <b>LOST</b>, and alert the sales desk.
+          </Alert>
+
+          <Select
+            label="Primary Unfeasibility Reason"
+            required
+            data={[
+              'Severe shading from trees / tall neighboring buildings',
+              'Weak roof structure / tile damage / load-bearing failure',
+              'Insufficient shadow-free roof area for required capacity',
+              'Excessive cable routing distance / severe DC voltage drop',
+              'Customer cancelled / Resident Welfare Association refusal',
+              'Rooftop water stagnation / waterproofing failure risk',
+              'Other structural or electrical constraint',
+            ]}
+            value={rejectReason}
+            onChange={(val) => setRejectReason(val ?? 'Other structural or electrical constraint')}
+            allowDeselect={false}
+          />
+
+          <Textarea
+            label="Detailed Technician Observations & Reason"
+            placeholder="Explain why this roof cannot safely support the solar plant (e.g. 80% shaded by adjacent banyan tree, decaying wooden purlins, etc.)..."
+            minRows={3}
+            value={rejectNotes}
+            onChange={(e) => setRejectNotes(safeValue(e))}
+          />
+
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={() => setRejectModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              leftSection={<ShieldAlert size={15} />}
+              loading={rejectFeasibilityMutation.isPending}
+              onClick={() => rejectFeasibilityMutation.mutate()}
+            >
+              Confirm Not Feasible
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
       <Modal opened={Boolean(previewPhoto)} onClose={() => setPreviewPhoto(null)} title="Job photo" size="xl">
         {previewPhoto && <Image src={assetUrl(previewPhoto)} alt="Job photo" radius="md" />}

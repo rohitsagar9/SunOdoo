@@ -25,12 +25,15 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
+  Flame,
   Headphones,
   MapPin,
+  Package,
   Phone,
   RefreshCw,
   SunMedium,
   Wrench,
+  Zap,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { api, apiError } from '@/lib/api';
@@ -44,13 +47,29 @@ import { EmptyState, LoadingState } from '@/components/States';
 import { Panel } from '@/components/dashboard/Panel';
 import { RoleGate } from '@/components/dashboard/RoleGate';
 
+type Horizon = 'TODAY' | 'TOMORROW' | 'NEXT_WEEK' | 'NEXT_MONTH' | 'OVERALL';
+
 const statusOptions = [
-  { value: 'ALL', label: 'All jobs' },
+  { value: 'ALL', label: 'All statuses' },
   { value: 'SCHEDULED', label: 'Scheduled' },
   { value: 'IN_PROGRESS', label: 'In progress' },
   { value: 'COMPLETED', label: 'Completed' },
   { value: 'CANCELLED', label: 'Cancelled' },
 ];
+
+function getJobSortTime(job: Job): number {
+  const dateStr = dayjs(job.scheduledDate).format('YYYY-MM-DD');
+  let timeStr = '09:00';
+  if (job.scheduledSlot) {
+    const match = job.scheduledSlot.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      timeStr = `${match[1].padStart(2, '0')}:${match[2]}`;
+    }
+  } else if (job.scheduledDate) {
+    timeStr = dayjs(job.scheduledDate).format('HH:mm');
+  }
+  return dayjs(`${dateStr}T${timeStr}:00`).valueOf();
+}
 
 export default function SchedulePage() {
   return (
@@ -62,6 +81,7 @@ export default function SchedulePage() {
 
 function Schedule() {
   const { user } = useAuth();
+  const [horizon, setHorizon] = useState<Horizon>('TODAY');
   const [date, setDate] = useState('');
   const [status, setStatus] = useState('ALL');
   const [workCategory, setWorkCategory] = useState<'ALL' | 'SALES' | 'SUPPORT'>('ALL');
@@ -88,6 +108,37 @@ function Schedule() {
 
   const jobs = query.data ?? [];
   const todayKey = dayjs().format('YYYY-MM-DD');
+  const now = dayjs();
+  const startOfToday = now.startOf('day');
+  const endOfWeek = now.add(7, 'day').endOf('day');
+  const endOfMonth = now.add(30, 'day').endOf('day');
+
+  const countToday = useMemo(
+    () => jobs.filter((j) => dayjs(j.scheduledDate).isSame(now, 'day')).length,
+    [jobs, now],
+  );
+  const countTomorrow = useMemo(
+    () => jobs.filter((j) => dayjs(j.scheduledDate).isSame(now.add(1, 'day'), 'day')).length,
+    [jobs, now],
+  );
+  const countNextWeek = useMemo(
+    () =>
+      jobs.filter(
+        (j) =>
+          dayjs(j.scheduledDate).isAfter(startOfToday.subtract(1, 'second')) &&
+          dayjs(j.scheduledDate).isBefore(endOfWeek),
+      ).length,
+    [jobs, startOfToday, endOfWeek],
+  );
+  const countNextMonth = useMemo(
+    () =>
+      jobs.filter(
+        (j) =>
+          dayjs(j.scheduledDate).isAfter(startOfToday.subtract(1, 'second')) &&
+          dayjs(j.scheduledDate).isBefore(endOfMonth),
+      ).length,
+    [jobs, startOfToday, endOfMonth],
+  );
 
   const salesCount = useMemo(
     () => jobs.filter((j) => j.type === 'SURVEY' || j.type === 'INSTALLATION').length,
@@ -99,16 +150,44 @@ function Schedule() {
   );
 
   const filteredJobs = useMemo(() => {
-    return jobs.filter((job) => {
-      if (workCategory === 'SALES') {
-        return job.type === 'SURVEY' || job.type === 'INSTALLATION';
-      }
-      if (workCategory === 'SUPPORT') {
-        return job.type === 'REPAIR' || job.type === 'MAINTENANCE';
-      }
-      return true;
-    });
-  }, [jobs, workCategory]);
+    return jobs
+      .filter((job) => {
+        if (workCategory === 'SALES') {
+          if (job.type !== 'SURVEY' && job.type !== 'INSTALLATION') return false;
+        } else if (workCategory === 'SUPPORT') {
+          if (job.type !== 'REPAIR' && job.type !== 'MAINTENANCE') return false;
+        }
+
+        // Horizon filter (applied if user hasn't explicitly picked a custom date)
+        if (!date && horizon !== 'OVERALL') {
+          const jobDate = dayjs(job.scheduledDate);
+          if (horizon === 'TODAY') {
+            if (!jobDate.isSame(now, 'day')) return false;
+          } else if (horizon === 'TOMORROW') {
+            if (!jobDate.isSame(now.add(1, 'day'), 'day')) return false;
+          } else if (horizon === 'NEXT_WEEK') {
+            if (jobDate.isBefore(startOfToday) || jobDate.isAfter(endOfWeek)) return false;
+          } else if (horizon === 'NEXT_MONTH') {
+            if (jobDate.isBefore(startOfToday) || jobDate.isAfter(endOfMonth)) return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => getJobSortTime(a) - getJobSortTime(b));
+  }, [jobs, workCategory, horizon, date, now, startOfToday, endOfWeek, endOfMonth]);
+
+  const urgentJobsInOneHour = useMemo(() => {
+    return jobs
+      .filter((job) => {
+        if (job.status !== 'SCHEDULED' && job.status !== 'IN_PROGRESS') return false;
+        if (!dayjs(job.scheduledDate).isSame(dayjs(), 'day')) return false;
+        const startMs = getJobSortTime(job);
+        const diffMins = dayjs(startMs).diff(dayjs(), 'minute');
+        return (diffMins >= -30 && diffMins <= 60) || job.status === 'IN_PROGRESS';
+      })
+      .sort((a, b) => getJobSortTime(a) - getJobSortTime(b));
+  }, [jobs]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Job[]>();
@@ -121,11 +200,7 @@ function Schedule() {
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([dateKey, dayJobs]) => {
-        const sortedDayJobs = [...dayJobs].sort((a, b) => {
-          const slotA = a.scheduledSlot ?? dayjs(a.scheduledDate).format('HH:mm');
-          const slotB = b.scheduledSlot ?? dayjs(b.scheduledDate).format('HH:mm');
-          return slotA.localeCompare(slotB);
-        });
+        const sortedDayJobs = [...dayJobs].sort((a, b) => getJobSortTime(a) - getJobSortTime(b));
         return [dateKey, sortedDayJobs] as [string, Job[]];
       });
   }, [filteredJobs]);
@@ -141,6 +216,7 @@ function Schedule() {
   const inProgress = jobs.filter((job) => job.status === 'IN_PROGRESS').length;
   const completed = jobs.filter((job) => job.status === 'COMPLETED').length;
   const kpis = techDashboard.data?.kpis;
+  const packedAlerts = techDashboard.data?.packedAlerts ?? [];
 
   return (
     <>
@@ -163,6 +239,54 @@ function Schedule() {
           </Button>
         }
       />
+
+      {packedAlerts.length > 0 && (
+        <Alert
+          color="teal"
+          variant="light"
+          radius="md"
+          mb="md"
+          icon={<Package size={20} />}
+          title={`📦 Hardware Kit Packed in Warehouse (${packedAlerts.length})`}
+        >
+          <Stack gap="xs" mt={4}>
+            <Text fz="xs">
+              Warehouse has packed inventory stock for these orders. The technician can now pick up the hardware kit for dispatch:
+            </Text>
+            {packedAlerts.map((alert) => (
+              <Group
+                key={alert.id}
+                justify="space-between"
+                p="xs"
+                style={{
+                  background: 'var(--sp-card)',
+                  borderRadius: 8,
+                  border: '1px solid var(--sp-border)',
+                }}
+              >
+                <div>
+                  <Text fz="xs" fw={700}>
+                    Order {alert.orderNumber} · {alert.customerName}
+                  </Text>
+                  <Text fz={10} c="dimmed">
+                    {alert.message} · {formatDate(alert.createdAt)}
+                  </Text>
+                </div>
+                <Button
+                  component={Link}
+                  href={alert.orderId ? `/dashboard/orders/${alert.orderId}` : '/dashboard/orders'}
+                  size="compact-xs"
+                  variant="light"
+                  color="teal"
+                  rightSection={<ArrowRight size={12} />}
+                >
+                  View Order Kit
+                </Button>
+              </Group>
+            ))}
+          </Stack>
+        </Alert>
+      )}
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md" mb="md">
         <StatCard
@@ -196,6 +320,34 @@ function Schedule() {
         />
       </SimpleGrid>
 
+      <Box mb="xs">
+        <Panel padding="xs">
+          <Group justify="space-between" align="center" px="xs" mb={6}>
+            <Text fz="xs" fw={700} tt="uppercase" c="dimmed" style={{ letterSpacing: '0.08em' }}>
+              Schedule Horizon Filter (Earliest Jobs on Top)
+            </Text>
+            <Text fz={10} c="dimmed">
+              {horizon === 'OVERALL' ? 'Showing all dates' : `Filtered to ${titleCase(horizon.replace('_', ' '))}`}
+            </Text>
+          </Group>
+          <SegmentedControl
+            fullWidth
+            value={horizon}
+            onChange={(val) => {
+              setHorizon(val as Horizon);
+              setDate('');
+            }}
+            data={[
+              { label: `Today (${countToday})`, value: 'TODAY' },
+              { label: `Tomorrow (${countTomorrow})`, value: 'TOMORROW' },
+              { label: `Next 7 Days (${countNextWeek})`, value: 'NEXT_WEEK' },
+              { label: `Next Month (${countNextMonth})`, value: 'NEXT_MONTH' },
+              { label: `Overall (${jobs.length})`, value: 'OVERALL' },
+            ]}
+          />
+        </Panel>
+      </Box>
+
       <Panel padding="xs">
         <SegmentedControl
           fullWidth
@@ -214,9 +366,12 @@ function Schedule() {
           <Group gap="sm">
             <TextInput
               type="date"
-              label="Date"
+              label="Custom Date"
               value={date}
-              onChange={(event) => setDate(safeValue(event))}
+              onChange={(event) => {
+                setDate(safeValue(event));
+                if (event.target.value) setHorizon('OVERALL');
+              }}
               w={{ base: '100%', sm: 190 }}
             />
             <Select
@@ -227,7 +382,7 @@ function Schedule() {
               allowDeselect={false}
               w={{ base: '100%', sm: 170 }}
             />
-            {(date || status !== 'ALL') && (
+            {(date || status !== 'ALL' || horizon !== 'TODAY') && (
               <Button
                 variant="subtle"
                 color="gray"
@@ -235,9 +390,10 @@ function Schedule() {
                 onClick={() => {
                   setDate('');
                   setStatus('ALL');
+                  setHorizon('TODAY');
                 }}
               >
-                Clear filters
+                Reset to Today
               </Button>
             )}
           </Group>
@@ -248,6 +404,76 @@ function Schedule() {
           </Text>
         </Group>
       </Panel>
+
+      {urgentJobsInOneHour.length > 0 && (
+        <Alert
+          color="red"
+          variant="light"
+          radius="md"
+          mt="md"
+          title={
+            <Group gap="xs">
+              <Flame size={18} color="#dc2626" />
+              <Text fw={700}>Priority Alert · Work in 1 Hour or In Progress</Text>
+            </Group>
+          }
+        >
+          <Stack gap="xs" mt={4}>
+            <Text fz="xs">
+              Early jobs scheduled right now or starting within 60 minutes today:
+            </Text>
+            {urgentJobsInOneHour.map((job) => {
+              const diffMins = dayjs(getJobSortTime(job)).diff(dayjs(), 'minute');
+              return (
+                <Paper
+                  key={job.id}
+                  p="xs"
+                  withBorder
+                  style={{ background: 'var(--sp-card)' }}
+                >
+                  <Group justify="space-between" wrap="nowrap">
+                    <div>
+                      <Group gap={6}>
+                        <Badge
+                          color="red"
+                          variant="filled"
+                          size="xs"
+                          leftSection={<Flame size={10} />}
+                        >
+                          {job.status === 'IN_PROGRESS'
+                            ? 'ACTIVE NOW'
+                            : diffMins <= 0
+                              ? 'DUE NOW'
+                              : `STARTS IN ${diffMins}M`}
+                        </Badge>
+                        <Text fz="sm" fw={700}>
+                          {job.customer.name}
+                        </Text>
+                        <Badge size="xs" variant="light" color={job.type === 'SURVEY' ? 'indigo' : 'ocean'}>
+                          {titleCase(job.type)}
+                        </Badge>
+                      </Group>
+                      <Text fz={10} c="dimmed" mt={2}>
+                        Slot: {job.scheduledSlot ?? formatTime(job.scheduledDate)} · {job.customer.address}
+                        {job.customer.city ? `, ${job.customer.city}` : ''}
+                      </Text>
+                    </div>
+                    <Button
+                      component={Link}
+                      href={`/dashboard/jobs/${job.id}`}
+                      size="compact-xs"
+                      color="red"
+                      rightSection={<ArrowRight size={12} />}
+                    >
+                      Open Job Card
+                    </Button>
+                  </Group>
+                </Paper>
+              );
+            })}
+          </Stack>
+        </Alert>
+      )}
 
       <Grid gap="md" mt="md">
         <Grid.Col span={{ base: 12, lg: 8 }}>
@@ -423,6 +649,15 @@ function Schedule() {
 }
 
 function JobRow({ job }: { job: Job }) {
+  const isToday = dayjs(job.scheduledDate).isSame(dayjs(), 'day');
+  const sortTime = getJobSortTime(job);
+  const diffMins = dayjs(sortTime).diff(dayjs(), 'minute');
+  const isStartingSoon =
+    isToday &&
+    (job.status === 'SCHEDULED' || job.status === 'IN_PROGRESS') &&
+    diffMins >= -30 &&
+    diffMins <= 60;
+
   return (
     <Paper
       p="md"
@@ -431,8 +666,8 @@ function JobRow({ job }: { job: Job }) {
         borderLeft: `4px solid ${
           job.status === 'COMPLETED'
             ? '#0f766e'
-            : job.status === 'IN_PROGRESS'
-              ? '#f5a800'
+            : isStartingSoon || job.status === 'IN_PROGRESS'
+              ? '#dc2626'
               : job.type === 'SURVEY'
                 ? '#6366f1'
                 : '#2178c4'
@@ -444,10 +679,22 @@ function JobRow({ job }: { job: Job }) {
           <ThemeIcon
             size={42}
             radius="md"
-            color={job.type === 'SURVEY' ? 'indigo' : 'ocean'}
-            variant="light"
+            color={
+              isStartingSoon
+                ? 'red'
+                : job.type === 'SURVEY'
+                  ? 'indigo'
+                  : 'ocean'
+            }
+            variant={isStartingSoon ? 'filled' : 'light'}
           >
-            {job.type === 'SURVEY' ? <CalendarDays size={19} /> : <Wrench size={19} />}
+            {isStartingSoon ? (
+              <Flame size={19} />
+            ) : job.type === 'SURVEY' ? (
+              <CalendarDays size={19} />
+            ) : (
+              <Wrench size={19} />
+            )}
           </ThemeIcon>
           <div>
             <Group gap={6} mb={2} wrap="wrap">
@@ -462,6 +709,35 @@ function JobRow({ job }: { job: Job }) {
                 {job.type === 'REPAIR' || job.type === 'MAINTENANCE' ? 'Support Work' : 'Sales Work'} · {titleCase(job.type)}
               </Badge>
               <StatusBadge status={job.status} size="xs" />
+
+              {/* Work within 1 hour urgency indicator */}
+              {job.status === 'IN_PROGRESS' && (
+                <Badge size="xs" variant="filled" color="orange" leftSection={<Zap size={10} />}>
+                  Active Now
+                </Badge>
+              )}
+              {job.status === 'SCHEDULED' && isToday && diffMins >= -30 && diffMins <= 60 && (
+                <Badge size="xs" variant="filled" color="red" leftSection={<Flame size={10} />}>
+                  {diffMins <= 0 ? 'Due now' : `In ~${diffMins}m`} · In 1 hr
+                </Badge>
+              )}
+              {job.status === 'SCHEDULED' && isToday && diffMins > 60 && diffMins <= 120 && (
+                <Badge size="xs" variant="light" color="yellow" leftSection={<Clock3 size={10} />}>
+                  In ~{Math.round(diffMins / 60)}h
+                </Badge>
+              )}
+
+              {/* Kit logistics tags */}
+              {job.pickedUpAt && !job.unloadedAt && (
+                <Badge size="xs" variant="light" color="cyan">
+                  Kit Picked Up
+                </Badge>
+              )}
+              {job.unloadedAt && (
+                <Badge size="xs" variant="light" color="teal">
+                  Kit Unloaded at Site
+                </Badge>
+              )}
             </Group>
             <Text fz={10} c="dimmed" className="sp-mono">
               {job.jobNumber} · Slot: {job.scheduledSlot ?? formatTime(job.scheduledDate)} ·{' '}
@@ -501,7 +777,7 @@ function JobRow({ job }: { job: Job }) {
             component={Link}
             href={`/dashboard/jobs/${job.id}`}
             size="compact-sm"
-            color="sun"
+            color={isStartingSoon ? 'red' : 'sun'}
             rightSection={<ArrowRight size={14} />}
           >
             Job card

@@ -286,6 +286,115 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post(
+    '/jobs/:id/pickup',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const job = await getJob(id);
+      const now = new Date();
+
+      const updated = await prisma.job.update({
+        where: { id },
+        data: { pickedUpAt: now },
+        include: jobInclude,
+      });
+
+      if (job.order && job.order.status === 'READY_TO_DISPATCH') {
+        await prisma.order.update({
+          where: { id: job.order.id },
+          data: { status: 'DISPATCHED', dispatchAt: now },
+        });
+      }
+
+      await audit(request.user.sub, 'JOB_HARDWARE_PICKED_UP', 'Job', id, {
+        orderId: job.orderId,
+      });
+
+      return updated;
+    },
+  );
+
+  app.post(
+    '/jobs/:id/unload',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const job = await getJob(id);
+      const now = new Date();
+
+      const updated = await prisma.job.update({
+        where: { id },
+        data: {
+          unloadedAt: now,
+          pickedUpAt: job.pickedUpAt ?? now,
+        },
+        include: jobInclude,
+      });
+
+      await audit(request.user.sub, 'JOB_HARDWARE_UNLOADED', 'Job', id, {
+        orderId: job.orderId,
+      });
+
+      return updated;
+    },
+  );
+
+  app.post(
+    '/jobs/:id/reject-feasibility',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'SALES', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z
+        .object({
+          reason: z.string().min(3).max(1000),
+        })
+        .parse(request.body);
+
+      const job = await getJob(id);
+      const now = new Date();
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const result = await tx.job.update({
+          where: { id },
+          data: {
+            status: 'COMPLETED',
+            completedAt: now,
+            completionNotes: `NOT FEASIBLE: ${body.reason}`,
+          },
+          include: jobInclude,
+        });
+
+        if (job.leadId) {
+          await tx.survey.updateMany({
+            where: { leadId: job.leadId },
+            data: {
+              completedAt: now,
+              findings: `Site Survey Rejected: ${body.reason}`,
+              approved: false,
+            },
+          });
+          await tx.lead.update({
+            where: { id: job.leadId },
+            data: {
+              status: 'LOST',
+              lostReason: `Roof not feasible: ${body.reason}`,
+            },
+          });
+        }
+
+        return result;
+      });
+
+      await audit(request.user.sub, 'SURVEY_NOT_FEASIBLE', 'Job', id, {
+        reason: body.reason,
+        leadId: job.leadId,
+      });
+
+      return updated;
+    },
+  );
+
+  app.post(
     '/jobs/:id/complete',
     { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
     async (request) => {

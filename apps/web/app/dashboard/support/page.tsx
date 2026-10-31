@@ -30,9 +30,12 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Download,
+  FileText,
   Headphones,
   LifeBuoy,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Send,
@@ -543,32 +546,54 @@ function SupportDesk() {
                             )}
                           </Table.Td>
                           <Table.Td ta="right">
-                            {item.status === 'PENDING' ? (
+                            <Group justify="flex-end" gap={6}>
                               <Button
                                 size="compact-xs"
-                                color="teal"
-                                leftSection={<Send size={12} />}
+                                variant="subtle"
+                                color="orange"
+                                leftSection={<Wrench size={12} />}
+                                title="Raise repair / service ticket"
                                 onClick={() => {
-                                  setSelectedHandover(item);
-                                  setHandoverModalOpen(true);
+                                  const primarySerial = item.warrantyUnits?.[0]?.serialNumber || '';
+                                  setTicketForm({
+                                    phone: item.customerPhone,
+                                    serialNumber: primarySerial,
+                                    issue: `Post-installation service & repair for ${item.customerName} (${item.systemSizeKw} kW ${titleCase(item.systemType)} plant, Order ${item.orderNumber}): `,
+                                    faultCode: '',
+                                    priority: 'MEDIUM',
+                                  });
+                                  setNewOpen(true);
                                 }}
                               >
-                                Send Congrats & Card
+                                Service / Repair
                               </Button>
-                            ) : (
-                              <Button
-                                size="compact-xs"
-                                variant="light"
-                                color="teal"
-                                leftSection={<ShieldCheck size={12} />}
-                                onClick={() => {
-                                  setSelectedHandover(item);
-                                  setHandoverModalOpen(true);
-                                }}
-                              >
-                                View Support Card
-                              </Button>
-                            )}
+                              {item.status === 'PENDING' ? (
+                                <Button
+                                  size="compact-xs"
+                                  color="teal"
+                                  leftSection={<Send size={12} />}
+                                  onClick={() => {
+                                    setSelectedHandover(item);
+                                    setHandoverModalOpen(true);
+                                  }}
+                                >
+                                  Congrats & Card
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  color="teal"
+                                  leftSection={<ShieldCheck size={12} />}
+                                  onClick={() => {
+                                    setSelectedHandover(item);
+                                    setHandoverModalOpen(true);
+                                  }}
+                                >
+                                  Support Card
+                                </Button>
+                              )}
+                            </Group>
                           </Table.Td>
                         </Table.Tr>
                       ))}
@@ -956,6 +981,128 @@ function SupportDesk() {
             <Box
               p="sm"
               style={{
+                borderRadius: 10,
+                background: 'var(--sp-card)',
+                border: '1px solid var(--sp-border)',
+              }}
+            >
+              <Group justify="space-between" mb="xs">
+                <Group gap="xs">
+                  <ThemeIcon size={26} radius="md" color="sun" variant="light">
+                    <FileText size={14} />
+                  </ThemeIcon>
+                  <Text fz="xs" fw={700} style={{ color: 'var(--sp-headings)' }}>
+                    Customer Bill & Tax Invoice
+                  </Text>
+                </Group>
+                <Badge color="teal" variant="light" size="xs">
+                  100% PAID · SETTLED
+                </Badge>
+              </Group>
+
+              <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs" mb="xs">
+                <Box p="xs" style={{ background: 'var(--sp-card-subtle)', borderRadius: 6, border: '1px solid var(--sp-border)' }}>
+                  <Text fz={10} c="dimmed">Invoice Number</Text>
+                  <Text fz="xs" fw={700} className="sp-mono">
+                    {selectedHandover.invoice?.invoiceNumber || `INV-${selectedHandover.orderNumber}`}
+                  </Text>
+                </Box>
+                <Box p="xs" style={{ background: 'var(--sp-card-subtle)', borderRadius: 6, border: '1px solid var(--sp-border)' }}>
+                  <Text fz={10} c="dimmed">Total Billed Amount</Text>
+                  <Text fz="xs" fw={700} className="sp-mono" c="teal.7">
+                    {formatINR(selectedHandover.invoice?.total || selectedHandover.total)}
+                  </Text>
+                </Box>
+                <Box p="xs" style={{ background: 'var(--sp-card-subtle)', borderRadius: 6, border: '1px solid var(--sp-border)' }}>
+                  <Text fz={10} c="dimmed">Completion Date</Text>
+                  <Text fz="xs">
+                    {formatDate(selectedHandover.invoice?.createdAt || selectedHandover.completedAt || selectedHandover.installedAt)}
+                  </Text>
+                </Box>
+              </SimpleGrid>
+
+              <Group justify="flex-end">
+                <Button
+                  component={Link}
+                  href={`/dashboard/orders/${selectedHandover.id}`}
+                  size="compact-xs"
+                  variant="subtle"
+                  color="ocean"
+                  rightSection={<ArrowRight size={12} />}
+                >
+                  View Order Details & Invoices
+                </Button>
+              </Group>
+            </Box>
+
+            <Box
+              p="sm"
+              style={{
+                borderRadius: 10,
+                background: 'var(--sp-card)',
+                border: '1px solid var(--sp-border)',
+              }}
+            >
+              <Group justify="space-between" mb="xs">
+                <Group gap="xs">
+                  <ThemeIcon size={26} radius="md" color="teal" variant="light">
+                    <ShieldCheck size={14} />
+                  </ThemeIcon>
+                  <Text fz="xs" fw={700} style={{ color: 'var(--sp-headings)' }}>
+                    Official Warranty Card & Covered Hardware Serials
+                  </Text>
+                </Group>
+                <Badge size="xs" color="teal" variant="light">
+                  {selectedHandover.warrantyUnits?.length ?? 0} components
+                </Badge>
+              </Group>
+
+              <Stack gap={6}>
+                {(selectedHandover.warrantyUnits ?? []).map((unit) => {
+                  const expiry = unit.warrantyExpiresAt || unit.warrantyEnd;
+                  return (
+                    <Group
+                      key={unit.id || unit.serialNumber}
+                      justify="space-between"
+                      p={6}
+                      style={{
+                        background: 'var(--sp-card-subtle)',
+                        borderRadius: 6,
+                        border: '1px solid var(--sp-border)',
+                      }}
+                    >
+                      <div>
+                        <Text fz="xs" fw={700} className="sp-mono">
+                          {unit.serialNumber}
+                        </Text>
+                        <Text fz={10} c="dimmed">
+                          {unit.productName} · {unit.category ? titleCase(unit.category) : 'Solar Component'}
+                        </Text>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <Badge size="xs" color="teal" variant="light">
+                          {unit.warrantyMonths ? Math.round(unit.warrantyMonths / 12) : 10} Yr Warranty
+                        </Badge>
+                        {expiry && (
+                          <Text fz={10} c="dimmed" mt={2}>
+                            Valid till {formatDate(expiry)}
+                          </Text>
+                        )}
+                      </div>
+                    </Group>
+                  );
+                })}
+                {(!selectedHandover.warrantyUnits || selectedHandover.warrantyUnits.length === 0) && (
+                  <Text fz="xs" c="dimmed">
+                    Solar array and central inverter covered under 25-yr / 10-yr manufacturer warranty.
+                  </Text>
+                )}
+              </Stack>
+            </Box>
+
+            <Box
+              p="sm"
+              style={{
                 borderRadius: 8,
                 background: 'var(--sp-card-subtle)',
                 border: '1px solid var(--sp-border)',
@@ -993,26 +1140,48 @@ function SupportDesk() {
               </Alert>
             )}
 
-            <Group justify="flex-end" gap="sm">
+            <Group justify="space-between" gap="sm" wrap="wrap">
               <Button
-                variant="default"
+                variant="light"
+                color="orange"
+                leftSection={<Wrench size={14} />}
                 onClick={() => {
+                  const primarySerial = selectedHandover.warrantyUnits?.[0]?.serialNumber || '';
+                  setTicketForm({
+                    phone: selectedHandover.customerPhone,
+                    serialNumber: primarySerial,
+                    issue: `Service & repair visit for ${selectedHandover.customerName} (${selectedHandover.systemSizeKw} kW ${titleCase(selectedHandover.systemType)} plant, Order ${selectedHandover.orderNumber}): `,
+                    faultCode: '',
+                    priority: 'MEDIUM',
+                  });
                   setHandoverModalOpen(false);
-                  setSelectedHandover(null);
+                  setNewOpen(true);
                 }}
               >
-                Close
+                Create Repair Work Ticket
               </Button>
-              {selectedHandover.status === 'PENDING' && (
+
+              <Group gap="sm">
                 <Button
-                  color="teal"
-                  leftSection={<Send size={15} />}
-                  loading={handoverMutation.isPending}
-                  onClick={() => handoverMutation.mutate(selectedHandover.id)}
+                  variant="default"
+                  onClick={() => {
+                    setHandoverModalOpen(false);
+                    setSelectedHandover(null);
+                  }}
                 >
-                  Send Congrats & Support Card
+                  Close
                 </Button>
-              )}
+                {selectedHandover.status === 'PENDING' && (
+                  <Button
+                    color="teal"
+                    leftSection={<Send size={15} />}
+                    loading={handoverMutation.isPending}
+                    onClick={() => handoverMutation.mutate(selectedHandover.id)}
+                  >
+                    Send Congrats & Support Card
+                  </Button>
+                )}
+              </Group>
             </Group>
           </Stack>
         )}

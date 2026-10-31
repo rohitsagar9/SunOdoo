@@ -444,6 +444,8 @@ model Job {
   clockInAt      DateTime?
   clockOutAt     DateTime?
   hoursWorked    Float?
+  pickedUpAt     DateTime?
+  unloadedAt     DateTime?
   notes          String?
   completionNotes String?
   completedAt    DateTime?

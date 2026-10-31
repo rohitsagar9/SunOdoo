@@ -396,7 +396,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       const monthStart = startOfMonth(now);
       const technicianId = request.user.role === 'TECHNICIAN' ? request.user.sub : undefined;
 
-      const [todayJobs, upcoming, logs, completedMonth, tickets] = await Promise.all([
+      const [todayJobs, upcoming, logs, completedMonth, tickets, alertLogs] = await Promise.all([
         prisma.job.findMany({
           where: {
             ...(technicianId ? { technicianId } : {}),
@@ -435,9 +435,32 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           orderBy: { createdAt: 'desc' },
           take: 6,
         }),
+        prisma.auditLog.findMany({
+          where: { action: 'WAREHOUSE_ALERT_TO_SALES' },
+          orderBy: { createdAt: 'desc' },
+          take: 12,
+        }),
       ]);
 
       const minutes = logs.reduce((sum, log) => sum + (log.minutes ?? 0), 0);
+
+      const packedAlerts = (alertLogs ?? [])
+        .map((log) => {
+          const meta = (log.meta as Record<string, any>) || {};
+          return {
+            id: log.id,
+            orderId: log.entityId,
+            orderNumber: meta.orderNumber || null,
+            customerName: meta.customerName || null,
+            category: meta.category || 'GENERAL',
+            message: meta.message || '',
+            urgent: Boolean(meta.urgent),
+            resolved: Boolean(meta.resolved),
+            technicianId: meta.technicianId || null,
+            createdAt: log.createdAt.toISOString(),
+          };
+        })
+        .filter((a) => !a.resolved && (!technicianId || !a.technicianId || a.technicianId === technicianId));
 
       return {
         kpis: {
@@ -450,6 +473,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         todayJobs,
         upcoming,
         tickets,
+        packedAlerts,
       };
     },
   );
@@ -617,6 +641,8 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
             include: {
               customer: true,
               quote: true,
+              invoices: true,
+              inventoryUnits: { include: { product: true } },
               job: {
                 include: {
                   technician: { select: { name: true } },
@@ -662,7 +688,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           customerEmail: o.customer.email,
           customerAddress: o.customer.address,
           customerCity: o.customer.city,
-          systemSizeKw: o.quote?.systemSizeKw ?? 5,
+          systemSizeKw: (o.quote as any)?.capacityKw ?? (o.quote as any)?.systemSizeKw ?? 5,
           systemType: o.quote?.systemType ?? 'ON_GRID',
           total: o.total,
           installedAt: (o.installedAt || o.completedAt || o.updatedAt).toISOString(),
@@ -672,6 +698,19 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           sentBy: meta.sentByName || log?.user?.name || null,
           cardCode: meta.cardCode || `SUN-AMC-${o.orderNumber.replace(/[^0-9]/g, '').slice(-4) || '2026'}`,
           technicianName: o.job?.technician?.name || 'Field Ops',
+          invoice: (o as any).invoices?.[0]
+            ? {
+                id: (o as any).invoices[0].id,
+                invoiceNumber: (o as any).invoices[0].invoiceNumber,
+                total: (o as any).invoices[0].total,
+                status: (o as any).invoices[0].status,
+              }
+            : null,
+          warrantyUnits: ((o as any).inventoryUnits ?? []).map((u: any) => ({
+            serialNumber: u.serialNumber,
+            productName: u.product?.name ?? 'Hardware Component',
+            warrantyEnd: u.warrantyEnd ? u.warrantyEnd.toISOString() : null,
+          })),
         };
       });
 

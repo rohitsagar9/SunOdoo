@@ -360,7 +360,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         if (job.type === 'SURVEY' && job.leadId) {
           await tx.survey.updateMany({
             where: { leadId: job.leadId },
-            data: { completedAt: now, findings: body.completionNotes },
+            data: { completedAt: now, findings: body.completionNotes, approved: true },
           });
           await tx.lead.update({ where: { id: job.leadId }, data: { status: 'SURVEY_COMPLETED' } });
         }

@@ -20,6 +20,7 @@ import {
   ArrowRight,
   BadgeIndianRupee,
   CalendarCheck,
+  CheckCircle2,
   FileText,
   Plus,
   RefreshCw,
@@ -228,6 +229,79 @@ function SalesDashboard() {
           </Panel>
         </Grid.Col>
       </Grid>
+
+      {data.readyForQuoteLeads && data.readyForQuoteLeads.length > 0 && (
+        <Box mb="md">
+          <Panel
+            title="Surveys completed · Ready for quote"
+            subtitle="Technicians completed physical site measurements. Ready to generate itemized BOM quotation."
+            action={
+              <Badge color="teal" variant="light" size="md">
+                {data.readyForQuoteLeads.length} ready
+              </Badge>
+            }
+          >
+            <ScrollArea>
+              <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" miw={720}>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Customer</Table.Th>
+                    <Table.Th>Requirement</Table.Th>
+                    <Table.Th>Site Measurements</Table.Th>
+                    <Table.Th>Feasibility</Table.Th>
+                    <Table.Th ta="right">Action</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {data.readyForQuoteLeads.map((lead) => (
+                    <Table.Tr key={lead.id}>
+                      <Table.Td>
+                        <Text fz="sm" fw={700} component={Link} href={`/dashboard/leads/${lead.id}`}>
+                          {lead.customer.name}
+                        </Text>
+                        <Text fz={10} c="dimmed">
+                          {lead.reference} · {lead.customer.phone} · {lead.customer.city ?? '—'}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge variant="light" color="sun" size="sm">
+                          {lead.requestedKw} kW {titleCase(lead.systemType)}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text fz="xs">
+                          {lead.survey?.roofDirection ? `Orientation: ${lead.survey.roofDirection}` : 'Orientation recorded'}
+                          {lead.survey?.tiltDegrees ? ` · Tilt: ${lead.survey.tiltDegrees}°` : ''}
+                          {lead.survey?.shadowFreeAreaSqft ? ` · ${lead.survey.shadowFreeAreaSqft} sq ft` : ''}
+                        </Text>
+                        <Text fz={10} c="dimmed">
+                          Cable run: {lead.survey?.cableDistanceM ?? '—'} m
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color="teal" variant="light" size="sm" leftSection={<CheckCircle2 size={12} />}>
+                          Survey Done
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Button
+                          component={Link}
+                          href={`/dashboard/leads/${lead.id}`}
+                          size="xs"
+                          color="sun"
+                          leftSection={<FileText size={13} />}
+                        >
+                          Generate quote
+                        </Button>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
+          </Panel>
+        </Box>
+      )}
 
       <Grid gap="md">
         <Grid.Col span={{ base: 12, lg: 7 }}>

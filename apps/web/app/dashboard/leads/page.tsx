@@ -30,6 +30,7 @@ import {
   ArrowRight,
   Building2,
   CalendarClock,
+  FilePlus2,
   IndianRupee,
   MoreHorizontal,
   Phone,
@@ -444,7 +445,30 @@ function LeadCard({
           Lost: {lead.lostReason}
         </Text>
       )}
-      <StatusBadge status={lead.status} size="xs" />
+      <Group justify="space-between" align="center" mt={6}>
+        <StatusBadge status={lead.status} size="xs" />
+        {lead.status === 'SURVEY_COMPLETED' && (
+          <Badge size="xs" color="teal" variant="light">
+            Ready for quote
+          </Badge>
+        )}
+      </Group>
+      {lead.status === 'SURVEY_COMPLETED' && (
+        <Button
+          fullWidth
+          size="xs"
+          mt={8}
+          color="sun"
+          variant="light"
+          leftSection={<FilePlus2 size={13} />}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
+        >
+          Review & Quote
+        </Button>
+      )}
     </Box>
   );
 }

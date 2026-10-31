@@ -314,6 +314,7 @@ export interface DashboardSales {
   pendingPayments: Payment[];
   recentLeads: Lead[];
   recentPayments: Payment[];
+  readyForQuoteLeads?: Lead[];
 }
 
 export interface DashboardTechnician {

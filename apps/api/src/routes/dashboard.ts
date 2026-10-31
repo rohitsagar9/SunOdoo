@@ -256,6 +256,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         recentLeads,
         recentPayments,
         myLeads,
+        readyForQuoteLeads,
       ] = await Promise.all([
         prisma.lead.groupBy({ by: ['status'], _count: { _all: true } }),
         prisma.lead.count({ where: { createdAt: { gte: weekAgo } } }),
@@ -283,6 +284,16 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           take: 6,
         }),
         prisma.lead.count({ where: { assignedToId: request.user.sub } }),
+        prisma.lead.findMany({
+          where: {
+            status: { in: ['SURVEY_COMPLETED', 'VERIFIED'] },
+            survey: { isNot: null },
+            quotes: { none: {} },
+          },
+          include: { customer: true, survey: true },
+          orderBy: { updatedAt: 'desc' },
+          take: 6,
+        }),
       ]);
 
       return {
@@ -308,6 +319,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         pendingPayments,
         recentLeads,
         recentPayments,
+        readyForQuoteLeads: readyForQuoteLeads ?? [],
       };
     },
   );

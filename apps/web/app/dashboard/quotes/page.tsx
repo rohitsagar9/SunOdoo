@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 import { formatDate, formatINR, safeValue, titleCase } from '@/lib/format';
-import type { Quote } from '@/lib/types';
+import type { Lead, Quote } from '@/lib/types';
 import { PageHeader } from '@/components/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -77,6 +77,14 @@ function QuotesList() {
         },
       });
       return response.data;
+    },
+  });
+
+  const readyLeadsQuery = useQuery({
+    queryKey: ['ready-leads-for-quote'],
+    queryFn: async () => {
+      const res = await api.get<Lead[]>('/leads', { params: { status: 'SURVEY_COMPLETED' } });
+      return (res.data ?? []).filter((l) => !l.quotes || l.quotes.length === 0);
     },
   });
 
@@ -163,6 +171,38 @@ function QuotesList() {
           color="indigo"
         />
       </SimpleGrid>
+
+      {readyLeadsQuery.data && readyLeadsQuery.data.length > 0 && (
+        <Alert
+          color="sun"
+          variant="light"
+          radius="md"
+          mb="md"
+          title={`${readyLeadsQuery.data.length} completed survey(s) waiting for quotation`}
+          icon={<FileText size={18} />}
+        >
+          <Group justify="space-between" align="center" wrap="wrap">
+            <Text fz="xs">
+              Site measurements recorded for:{' '}
+              <b>
+                {readyLeadsQuery.data
+                  .map((l) => `${l.customer?.name ?? 'Customer'} (${l.requestedKw}kW)`)
+                  .join(', ')}
+              </b>
+              . Review the survey measurements and generate the customer quotation.
+            </Text>
+            <Button
+              component={Link}
+              href={`/dashboard/leads/${readyLeadsQuery.data[0].id}`}
+              size="xs"
+              color="sun"
+              rightSection={<ArrowRight size={13} />}
+            >
+              Generate quote for {readyLeadsQuery.data[0].customer?.name ?? 'lead'}
+            </Button>
+          </Group>
+        </Alert>
+      )}
 
       <Panel padding="md" className="sp-no-print">
         <Group justify="space-between" gap="md" wrap="wrap">

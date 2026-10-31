@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   Alert,
+  Badge,
   Box,
   Button,
   Divider,
@@ -142,7 +143,7 @@ function JobDetail() {
   });
 
   const surveyMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (approve?: boolean) => {
       if (!job?.lead?.survey?.id) return;
       return (
         await api.patch(`/surveys/${job.lead.survey.id}`, {
@@ -151,14 +152,17 @@ function JobDetail() {
           cableDistanceM: measurements.cableDistanceM ? Number(measurements.cableDistanceM) : undefined,
           shadowFreeAreaSqft: measurements.shadowFreeAreaSqft ? Number(measurements.shadowFreeAreaSqft) : undefined,
           findings: measurements.findings || undefined,
+          ...(approve != null ? { approved: approve } : {}),
         })
       ).data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, approve) => {
       invalidate();
       notifications.show({
-        title: 'Roof measurements recorded',
-        message: 'Tilt angle and site measurements saved.',
+        title: approve ? 'Feasibility approved' : 'Roof measurements recorded',
+        message: approve
+          ? 'Site marked feasible. Sales can now issue a quotation.'
+          : 'Tilt angle and site measurements saved.',
         color: 'teal',
       });
     },
@@ -557,15 +561,30 @@ function JobDetail() {
                     value={measurements.findings}
                     onChange={(e) => setMeasurements((prev) => ({ ...prev, findings: safeValue(e) }))}
                   />
-                  <Group justify="flex-end">
-                    <Button
-                      variant="light"
-                      color="indigo"
-                      loading={surveyMutation.isPending}
-                      onClick={() => surveyMutation.mutate()}
-                    >
-                      Save site measurements
-                    </Button>
+                  <Group justify="space-between" wrap="wrap">
+                    <Badge color={job.lead?.survey?.approved ? 'teal' : 'yellow'} variant="light">
+                      {job.lead?.survey?.approved ? 'Feasibility Approved' : 'Feasibility Pending Sign-off'}
+                    </Badge>
+                    <Group gap="xs">
+                      <Button
+                        variant="light"
+                        color="indigo"
+                        loading={surveyMutation.isPending}
+                        onClick={() => surveyMutation.mutate(false)}
+                      >
+                        Save measurements
+                      </Button>
+                      {!job.lead?.survey?.approved && (
+                        <Button
+                          color="teal"
+                          leftSection={<ShieldCheck size={14} />}
+                          loading={surveyMutation.isPending}
+                          onClick={() => surveyMutation.mutate(true)}
+                        >
+                          Approve feasibility
+                        </Button>
+                      )}
+                    </Group>
                   </Group>
                 </Stack>
               </Panel>

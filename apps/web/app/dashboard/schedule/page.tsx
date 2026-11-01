@@ -32,6 +32,7 @@ import {
   Phone,
   RefreshCw,
   SunMedium,
+  Truck,
   Wrench,
   Zap,
 } from 'lucide-react';
@@ -218,6 +219,15 @@ function Schedule() {
   const kpis = techDashboard.data?.kpis;
   const packedAlerts = techDashboard.data?.packedAlerts ?? [];
 
+  const dispatchedInstallationJobs = useMemo(() => {
+    return jobs.filter(
+      (j) =>
+        j.type === 'INSTALLATION' &&
+        j.status !== 'COMPLETED' &&
+        (j.order?.status === 'DISPATCHED' || Boolean(j.pickedUpAt))
+    );
+  }, [jobs]);
+
   return (
     <>
       <PageHeader
@@ -239,6 +249,59 @@ function Schedule() {
           </Button>
         }
       />
+
+      {dispatchedInstallationJobs.length > 0 && (
+        <Alert
+          color="teal"
+          variant="filled"
+          radius="md"
+          mb="md"
+          icon={<Truck size={22} />}
+          title={`🚀 Dispatched Orders Ready for Site Installation (${dispatchedInstallationJobs.length})`}
+        >
+          <Stack gap="xs" mt={4}>
+            <Text fz="xs">
+              Hardware kits have been packed and dispatched by warehouse. Technicians can collect/unload the hardware, upload commissioning photos, capture customer signature, and complete the installation:
+            </Text>
+            {dispatchedInstallationJobs.map((instJob) => (
+              <Group
+                key={instJob.id}
+                justify="space-between"
+                p="xs"
+                style={{
+                  background: 'var(--sp-card)',
+                  borderRadius: 8,
+                  border: '1px solid var(--sp-border)',
+                }}
+              >
+                <div>
+                  <Group gap="xs">
+                    <Text fz="xs" fw={700} c="var(--sp-headings)">
+                      {instJob.jobNumber} · {instJob.customer.name}
+                    </Text>
+                    <Badge size="xs" color="teal" variant="light">
+                      DISPATCHED
+                    </Badge>
+                  </Group>
+                  <Text fz={10} c="dimmed">
+                    {instJob.customer.phone} · {instJob.customer.address}
+                    {instJob.customer.city ? `, ${instJob.customer.city}` : ''}
+                  </Text>
+                </div>
+                <Button
+                  component={Link}
+                  href={`/dashboard/jobs/${instJob.id}`}
+                  size="compact-xs"
+                  color="sun"
+                  rightSection={<ArrowRight size={12} />}
+                >
+                  Open Installation Job & Signature
+                </Button>
+              </Group>
+            ))}
+          </Stack>
+        </Alert>
+      )}
 
       {packedAlerts.length > 0 && (
         <Alert

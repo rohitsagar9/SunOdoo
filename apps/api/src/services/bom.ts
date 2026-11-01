@@ -23,6 +23,7 @@ export interface PricedQuote {
   items: PricedItem[];
   subtotal: number;
   discount: number;
+  discountPercent?: number;
   taxRate: number;
   taxAmount: number;
   total: number;
@@ -68,6 +69,7 @@ export async function priceBom(
   systemType: SystemType,
   discount = 0,
   taxRate = 13.8,
+  discountPercent = 0,
 ): Promise<PricedQuote> {
   const lines = buildBom(capacityKw, systemType);
   const products = await prisma.product.findMany({
@@ -100,7 +102,16 @@ export async function priceBom(
   });
 
   const subtotal = items.reduce((sum, item) => sum.plus(item.total), new Decimal(0));
-  const safeDiscount = new Decimal(Math.max(0, discount));
+  let safeDiscount = new Decimal(Math.max(0, discount));
+  let effPercent = discountPercent;
+
+  if (discountPercent > 0) {
+    effPercent = Math.min(50, Math.max(0, discountPercent));
+    safeDiscount = subtotal.times(effPercent).dividedBy(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+  } else if (discount > 0 && subtotal.greaterThan(0)) {
+    effPercent = safeDiscount.dividedBy(subtotal).times(100).toDecimalPlaces(2).toNumber();
+  }
+
   const taxable = Decimal.max(subtotal.minus(safeDiscount), 0);
   const taxAmount = taxable.times(taxRate).dividedBy(100).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
   const total = taxable.plus(taxAmount).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
@@ -110,6 +121,7 @@ export async function priceBom(
     items,
     subtotal: subtotal.toNumber(),
     discount: safeDiscount.toNumber(),
+    discountPercent: effPercent,
     taxRate,
     taxAmount: taxAmount.toNumber(),
     total: total.toNumber(),

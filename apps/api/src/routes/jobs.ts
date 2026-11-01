@@ -10,7 +10,17 @@ import { audit } from '../lib/audit.js';
 
 const jobInclude = {
   customer: true,
-  lead: { include: { survey: true } },
+  lead: {
+    include: {
+      survey: true,
+      orders: {
+        include: {
+          job: { select: { id: true, jobNumber: true, status: true, scheduledDate: true, type: true } },
+        },
+        orderBy: { createdAt: 'desc' as const },
+      },
+    },
+  },
   technician: { select: { id: true, name: true, phone: true } },
   order: {
     include: {
@@ -18,6 +28,14 @@ const jobInclude = {
       payments: { orderBy: { createdAt: 'desc' as const } },
       kitItems: { include: { product: true } },
       inventoryUnits: { include: { product: true } },
+    },
+  },
+  ticket: {
+    include: {
+      customer: true,
+      product: true,
+      inventoryUnit: true,
+      invoices: true,
     },
   },
   photos: { orderBy: { createdAt: 'desc' as const } },
@@ -114,7 +132,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     '/jobs/:id/clock-in',
-    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR', 'SALES')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       const job = await getJob(id);
@@ -153,7 +171,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     '/jobs/:id/clock-out',
-    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR', 'SALES')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       const job = await getJob(id);
@@ -193,7 +211,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     '/jobs/:id/photos',
-    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR', 'SALES')] },
     async (request, reply) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       await getJob(id);
@@ -216,7 +234,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
 
   app.post(
     '/jobs/:id/signature',
-    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR', 'SALES')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       const body = z
@@ -359,7 +377,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
           data: {
             status: 'COMPLETED',
             completedAt: now,
-            completionNotes: `NOT FEASIBLE: ${body.reason}`,
+            completionNotes: `TECHNICIAN ASSESSED NOT FEASIBLE: ${body.reason} (Pending Sales Feasibility Review)`,
           },
           include: jobInclude,
         });
@@ -369,15 +387,9 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
             where: { leadId: job.leadId },
             data: {
               completedAt: now,
-              findings: `Site Survey Rejected: ${body.reason}`,
+              technicianAssessment: 'NOT_FEASIBLE',
+              findings: `[Technician: NOT FEASIBLE] ${body.reason}`,
               approved: false,
-            },
-          });
-          await tx.lead.update({
-            where: { id: job.leadId },
-            data: {
-              status: 'LOST',
-              lostReason: `Roof not feasible: ${body.reason}`,
             },
           });
         }
@@ -385,7 +397,7 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
         return result;
       });
 
-      await audit(request.user.sub, 'SURVEY_NOT_FEASIBLE', 'Job', id, {
+      await audit(request.user.sub, 'SURVEY_TECHNICIAN_NOT_FEASIBLE', 'Job', id, {
         reason: body.reason,
         leadId: job.leadId,
       });
@@ -395,8 +407,132 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post(
+    '/jobs/:id/survey-feasible',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'SALES', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z
+        .object({
+          roofDirection: z.string().optional(),
+          tiltDegrees: z.coerce.number().optional(),
+          cableDistanceM: z.coerce.number().optional(),
+          shadowFreeAreaSqft: z.coerce.number().optional(),
+          findings: z.string().optional(),
+        })
+        .parse(request.body ?? {});
+
+      const job = await getJob(id);
+      const now = new Date();
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const result = await tx.job.update({
+          where: { id },
+          data: {
+            status: 'COMPLETED',
+            completedAt: now,
+            completionNotes: `TECHNICIAN ASSESSED FEASIBLE (Pending Sales Final Review & Quote)`,
+          },
+          include: jobInclude,
+        });
+
+        if (job.leadId) {
+          await tx.survey.updateMany({
+            where: { leadId: job.leadId },
+            data: {
+              completedAt: now,
+              technicianAssessment: 'FEASIBLE',
+              roofDirection: body.roofDirection,
+              tiltDegrees: body.tiltDegrees,
+              cableDistanceM: body.cableDistanceM,
+              shadowFreeAreaSqft: body.shadowFreeAreaSqft,
+              findings: body.findings,
+            },
+          });
+        }
+
+        return result;
+      });
+
+      await audit(request.user.sub, 'SURVEY_TECHNICIAN_FEASIBLE', 'Job', id, {
+        leadId: job.leadId,
+      });
+
+      return updated;
+    },
+  );
+
+  app.post(
+    '/jobs/:id/inspection',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'SALES', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z
+        .object({
+          outcome: z.enum(['REPAIR', 'REPLACEMENT']),
+          repairBudget: z.coerce.number().min(0).optional(),
+          replacementPart: z.string().optional(),
+          notes: z.string().min(3).max(2000),
+        })
+        .parse(request.body);
+
+      const job = await getJob(id);
+      const now = new Date();
+
+      if (!job.ticketId) {
+        throw new AppError(422, 'This job is not linked to a support ticket', 'NO_TICKET');
+      }
+
+      const budget = body.repairBudget || 0;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.ticket.update({
+          where: { id: job.ticketId! },
+          data: {
+            inspectionOutcome: body.outcome,
+            repairBudget: body.outcome === 'REPAIR' ? budget : undefined,
+            replacementPart: body.outcome === 'REPLACEMENT' ? body.replacementPart : undefined,
+            inspectionNotes: body.notes,
+            laborCharge: body.outcome === 'REPAIR' ? budget : 0,
+            partsCharge: body.outcome === 'REPLACEMENT' ? budget : 0,
+            totalCharge: budget,
+            status: 'IN_PROGRESS',
+          },
+        });
+
+        await tx.ticketUpdate.create({
+          data: {
+            ticketId: job.ticketId!,
+            authorId: request.user.sub,
+            message: `Technician on-site inspection complete. Recommended: ${body.outcome}. ${
+              body.outcome === 'REPAIR'
+                ? `Estimated Repair Budget: ₹${budget}`
+                : `Replacement Part: ${body.replacementPart || 'Component'} (Est: ₹${budget})`
+            }. Notes: ${body.notes}. Awaiting Support warranty check & approval.`,
+            statusTo: 'IN_PROGRESS',
+          },
+        });
+
+        return tx.job.update({
+          where: { id },
+          data: {
+            completionNotes: `INSPECTION COMPLETE: Recommended ${body.outcome}. ${body.notes}`,
+          },
+          include: jobInclude,
+        });
+      });
+
+      await audit(request.user.sub, 'TICKET_INSPECTION_SUBMITTED', 'Job', id, {
+        outcome: body.outcome,
+        ticketId: job.ticketId,
+      });
+
+      return updated;
+    },
+  );
+
+  app.post(
     '/jobs/:id/complete',
-    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR')] },
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'DIRECTOR', 'SALES')] },
     async (request) => {
       const { id } = z.object({ id: z.string() }).parse(request.params);
       const body = z
@@ -410,11 +546,11 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       const job = await getJob(id);
       if (job.status === 'COMPLETED') return job;
 
-      if (job.type === 'INSTALLATION' && !job.signature) {
+      if ((job.type === 'INSTALLATION' || job.type === 'REPAIR') && !job.signature) {
         throw new AppError(409, 'Capture the customer signature before completing the job', 'SIGNATURE_REQUIRED');
       }
-      if (job.type === 'INSTALLATION' && job.photos.length === 0) {
-        throw new AppError(409, 'Upload at least one finished-roof photo before completing the job', 'PHOTO_REQUIRED');
+      if ((job.type === 'INSTALLATION' || job.type === 'REPAIR') && job.photos.length === 0) {
+        throw new AppError(409, 'Upload at least one photo before completing the job', 'PHOTO_REQUIRED');
       }
 
       const now = new Date();
@@ -431,6 +567,58 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
           },
           include: jobInclude,
         });
+
+        if (job.ticketId) {
+          const ticket = await tx.ticket.findUnique({ where: { id: job.ticketId } });
+          if (ticket) {
+            const existingInvoice = await tx.invoice.findFirst({ where: { ticketId: ticket.id } });
+            let invoiceNumber = existingInvoice?.invoiceNumber;
+            if (!existingInvoice) {
+              invoiceNumber = await nextInvoiceNumber();
+              const subtotal = ticket.billable ? ticket.totalCharge : 0;
+              const taxRate = ticket.billable ? 18 : 0;
+              const taxAmount = Math.round(subtotal * (taxRate / 100));
+              const total = subtotal + taxAmount;
+
+              await tx.invoice.create({
+                data: {
+                  invoiceNumber,
+                  customerId: ticket.customerId,
+                  ticketId: ticket.id,
+                  type: 'REPAIR',
+                  subtotal,
+                  taxRate,
+                  taxAmount,
+                  total,
+                  status: ticket.billable ? 'SENT' : 'PAID',
+                  paidAt: ticket.billable ? undefined : now,
+                  dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+                  createdById: request.user.sub,
+                },
+              });
+            }
+
+            await tx.ticket.update({
+              where: { id: ticket.id },
+              data: {
+                status: 'RESOLVED',
+                resolvedAt: now,
+                resolution: body.completionNotes || 'Repair completed on site with signature and photos.',
+              },
+            });
+
+            await tx.ticketUpdate.create({
+              data: {
+                ticketId: ticket.id,
+                authorId: request.user.sub,
+                message: `Technician completed repair visit with customer signature and proof photos. Generated Repair Bill #${invoiceNumber} (${
+                  ticket.billable ? `₹${ticket.totalCharge}` : '₹0 - Covered under warranty'
+                }).`,
+                statusTo: 'RESOLVED',
+              },
+            });
+          }
+        }
 
         if (job.order) {
           await tx.order.update({

@@ -242,6 +242,8 @@ model Survey {
   cableDistanceM      Int?
   shadowFreeAreaSqft  Int?
   approved            Boolean   @default(false)
+  technicianAssessment String?  // 'FEASIBLE' | 'NOT_FEASIBLE'
+  overrideReason      String?   // sales explanation when overriding technician's unfeasibility
   findings            String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
@@ -260,6 +262,7 @@ model Quote {
   systemType    SystemType
   capacityKw    Float
   subtotal      Int
+  discountPercent Float?    @default(0)
   discount      Int         @default(0)
   taxRate       Float       @default(13.8)
   taxAmount     Int
@@ -373,6 +376,8 @@ model Payment {
   screenshotUrl String?
   reference     String?
   notes         String?
+  credibilityConfirmed Boolean? @default(false)
+  cashDepositVerified  Boolean? @default(false)
   submittedById String?
   approvedById  String?
   approvedAt    DateTime?
@@ -435,6 +440,7 @@ model Job {
   jobNumber      String    @unique
   orderId        String?   @unique
   leadId         String?
+  ticketId       String?
   customerId     String
   type           JobType
   status         JobStatus @default(SCHEDULED)
@@ -454,6 +460,7 @@ model Job {
 
   order      Order?      @relation(fields: [orderId], references: [id])
   lead       Lead?       @relation(fields: [leadId], references: [id])
+  ticket     Ticket?     @relation(fields: [ticketId], references: [id])
   customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
   technician User?       @relation("JobTechnician", fields: [technicianId], references: [id])
   photos     JobPhoto[]
@@ -466,6 +473,7 @@ model Job {
   @@index([technicianId])
   @@index([customerId])
   @@index([leadId])
+  @@index([ticketId])
 }
 
 model JobPhoto {
@@ -529,6 +537,12 @@ model Ticket {
   totalCharge         Int            @default(0)
   assignedToId        String?
   resolution          String?
+  inspectionOutcome   String?
+  repairBudget        Int?
+  replacementPart     String?
+  inspectionNotes     String?
+  approvedAt          DateTime?
+  approvedBy          String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   resolvedAt          DateTime?
@@ -543,6 +557,7 @@ model Ticket {
   updates       TicketUpdate[]
   invoices      Invoice[]
   payments      Payment[]
+  jobs          Job[]
 
   @@index([status])
   @@index([serialNumber])

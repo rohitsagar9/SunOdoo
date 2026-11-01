@@ -12,6 +12,7 @@ import {
   Group,
   Menu,
   Modal,
+  Paper,
   ScrollArea,
   SegmentedControl,
   Select,
@@ -21,6 +22,7 @@ import {
   Text,
   TextInput,
   Textarea,
+  ThemeIcon,
   Tooltip,
 } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -130,7 +132,7 @@ function LeadsKanban() {
     },
   });
 
-  const [sortOrder, setSortOrder] = useState<'fifo' | 'newest'>('fifo');
+  const [sortOrder, setSortOrder] = useState<'fifo' | 'newest'>('newest');
 
   const grouped = useMemo(() => {
     const map = new Map<string, Lead[]>();
@@ -160,7 +162,6 @@ function LeadsKanban() {
       <PageHeader
         eyebrow="Pipeline"
         title="Leads Pipeline"
-        description="Enquiries from the website, phone and walk-ins. Move cards as the conversation progresses through the sales Pipeline."
         actions={
           <>
             <Button leftSection={<Plus size={15} />} color="sun" onClick={() => setNewOpen(true)}>
@@ -181,7 +182,7 @@ function LeadsKanban() {
 
       <Panel padding="md" className="sp-no-print">
         <Group justify="space-between" gap="md" wrap="wrap">
-          <Group gap="sm" wrap="wrap">
+          <Group gap="sm" wrap="wrap" style={{ flex: 1 }}>
             <TextInput
               placeholder="Search reference, name or phone…"
               leftSection={<Search size={15} />}
@@ -193,17 +194,6 @@ function LeadsKanban() {
               label="Only my leads"
               checked={mine}
               onChange={(event) => setMine(event.currentTarget.checked)}
-            />
-            <Select
-              size="xs"
-              w={180}
-              value={sortOrder}
-              onChange={(val) => setSortOrder(val === 'newest' ? 'newest' : 'fifo')}
-              data={[
-                { value: 'fifo', label: 'FIFO (Oldest queue first)' },
-                { value: 'newest', label: 'Newest enquiries first' },
-              ]}
-              allowDeselect={false}
             />
             {focusStatus && (
               <Badge
@@ -218,24 +208,6 @@ function LeadsKanban() {
                 Focus: {titleCase(focusStatus)}
               </Badge>
             )}
-          </Group>
-          <Group gap="lg">
-            <div>
-              <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.1em' }}>
-                Leads shown
-              </Text>
-              <Text fw={800} fz="lg">
-                {totalLeads}
-              </Text>
-            </div>
-            <div>
-              <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.1em' }}>
-                Quoted value
-              </Text>
-              <Text fw={800} fz="lg" c="teal.7">
-                {formatINR(totalValue, true)}
-              </Text>
-            </div>
           </Group>
         </Group>
       </Panel>
@@ -325,6 +297,8 @@ function LeadsKanban() {
     </>
   );
 }
+
+
 
 function LeadCard({
   lead,

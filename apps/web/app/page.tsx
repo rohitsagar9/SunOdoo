@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -13,6 +14,8 @@ import {
   Headphones,
   Home,
   IndianRupee,
+  MessageSquare,
+  Phone,
   PhoneCall,
   Ruler,
   ShieldCheck,
@@ -31,6 +34,7 @@ import {
   Divider,
   Group,
   Paper,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
@@ -39,6 +43,7 @@ import {
 } from '@mantine/core';
 import { Logo } from '@/components/Brand';
 import { InquiryForm } from '@/components/InquiryForm';
+import { PublicIssueForm } from '@/components/PublicIssueForm';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import classes from './landing.module.css';
 
@@ -184,6 +189,7 @@ export default function LandingPage() {
             <a href="#packages">Packages</a>
             <a href="#process">How it works</a>
             <a href="#roles">For teams</a>
+            <a href="#support">Report an issue / Helpline</a>
             <Link href="/portal">Customer portal</Link>
           </Group>
           <Group gap="sm">
@@ -243,7 +249,7 @@ export default function LandingPage() {
               </Button>
             </Group>
 
-            <SimpleGrid cols={3} mt={48} className={classes.heroStats}>
+            <SimpleGrid cols={3} mt={40} className={classes.heroStats}>
               <div>
                 <Text className={classes.statValue}>1–5 kW</Text>
                 <Text className={classes.statLabel}>On-grid & off-grid packages</Text>
@@ -265,7 +271,9 @@ export default function LandingPage() {
             </Paper>
             <Group gap={8} mt="md" justify="center" className={classes.inquiryNote}>
               <CheckCircle2 size={14} />
-              <Text fz="xs">Goes directly to the sales dashboard</Text>
+              <Text fz="xs">
+                Instant reference number · Verified site survey in 24 hours
+              </Text>
             </Group>
           </div>
         </div>
@@ -372,6 +380,114 @@ export default function LandingPage() {
             </Card>
           ))}
         </SimpleGrid>
+      </section>
+
+      <section className={classes.section} id="support">
+        <div className={classes.sectionHead}>
+          <Text className={classes.kicker}>SolarCare™ Customer Helpline & Support</Text>
+          <Title order={2} className={classes.sectionTitle}>
+            24/7 Breakdown Assistance & Technical Desk
+          </Title>
+          <Text c="dimmed" maw={660} mx="auto" ta="center">
+            Facing low generation, inverter trip, or equipment fault? Speak directly to our engineers or submit an issue ticket below. We verify warranty from serial numbers and dispatch on-field technicians.
+          </Text>
+        </div>
+
+        <Stack gap="xl" maw={880} mx="auto" mt="xl">
+          {/* Unified Direct Helpline Banner */}
+          <Paper
+            p="lg"
+            radius="xl"
+            withBorder
+            style={{
+              background: 'var(--sp-card)',
+              borderColor: 'var(--sp-border)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+            }}
+          >
+            <Stack gap="md">
+              <Group justify="space-between" align="center" wrap="wrap" gap="md">
+                <Group gap="md">
+                  <ThemeIcon size={48} radius="md" color="sun" variant="light">
+                    <Headphones size={24} />
+                  </ThemeIcon>
+                  <div>
+                    <Text fw={800} fz="lg" c="var(--sp-headings)">
+                      Direct Customer Helpline
+                    </Text>
+                    <Text fz="xs" c="dimmed">
+                      Speak directly to our certified solar technical support team
+                    </Text>
+                  </div>
+                </Group>
+                <Group gap="sm" wrap="wrap">
+                  <Button
+                    component="a"
+                    href="tel:18007866366"
+                    size="sm"
+                    color="sun"
+                    leftSection={<Phone size={14} />}
+                  >
+                    1800-SUN-ODOO
+                  </Button>
+                  <Button
+                    component="a"
+                    href="tel:+919000000006"
+                    size="sm"
+                    color="teal"
+                    variant="light"
+                    leftSection={<Phone size={14} />}
+                  >
+                    +91 90000 00006
+                  </Button>
+                  <Button
+                    component="a"
+                    href="https://wa.me/919000000006?text=Hello%20SunPower%20Support,%20I%20have%20an%20issue%20with%20my%20solar%20system."
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    size="sm"
+                    color="green"
+                    variant="light"
+                    leftSection={<MessageSquare size={14} />}
+                  >
+                    WhatsApp Support
+                  </Button>
+                </Group>
+              </Group>
+
+              <Divider />
+
+              <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+                <Group gap={8}>
+                  <CheckCircle2 size={15} color="#0f766e" />
+                  <Text fz="xs" c="dimmed">Average phone response under 2 mins</Text>
+                </Group>
+                <Group gap={8}>
+                  <CheckCircle2 size={15} color="#0f766e" />
+                  <Text fz="xs" c="dimmed">24/7 emergency response for hazard/trip</Text>
+                </Group>
+                <Group gap={8}>
+                  <CheckCircle2 size={15} color="#0f766e" />
+                  <Text fz="xs" c="dimmed">Technician site visit within 24 hours</Text>
+                </Group>
+              </SimpleGrid>
+            </Stack>
+          </Paper>
+
+          {/* Form Card */}
+          <Paper
+            p="xl"
+            radius="xl"
+            withBorder
+            style={{
+              background: 'var(--sp-card)',
+              borderColor: 'var(--sp-border)',
+              boxShadow: '0 4px 24px rgba(0, 0, 0, 0.06)',
+            }}
+          >
+            <PublicIssueForm />
+          </Paper>
+        </Stack>
       </section>
 
       <section className={classes.section} id="roles">
@@ -546,6 +662,7 @@ export default function LandingPage() {
               </Text>
               <a href="#packages">Packages</a>
               <a href="#process">How it works</a>
+              <a href="#support">Report an issue / Helpline</a>
               <Link href="/portal">Customer portal</Link>
             </Stack>
             <Stack gap={6}>

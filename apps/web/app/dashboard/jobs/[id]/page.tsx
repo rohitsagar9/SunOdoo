@@ -17,6 +17,7 @@ import {
   NumberInput,
   Paper,
   ScrollArea,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -31,10 +32,12 @@ import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
+  ArrowRight,
   Camera,
   CheckCircle2,
   Clock3,
   FileImage,
+  Headphones,
   IndianRupee,
   LogIn,
   LogOut,
@@ -128,6 +131,16 @@ function JobDetail() {
         ...current,
         amount: current.amount || (job.order ? String(job.order.balanceDue) : ''),
       }));
+      if (job.ticket) {
+        if (job.ticket.inspectionOutcome) {
+          setInspection({
+            outcome: (job.ticket.inspectionOutcome as 'REPAIR' | 'REPLACEMENT') || 'REPAIR',
+            repairBudget: String(job.ticket.repairBudget ?? 1500),
+            replacementPart: job.ticket.replacementPart ?? 'Inverter Main Control Board',
+            notes: job.ticket.inspectionNotes ?? '',
+          });
+        }
+      }
       if (job.lead?.survey) {
         setMeasurements({
           roofDirection: job.lead.survey.roofDirection ?? '',
@@ -258,6 +271,71 @@ function JobDetail() {
       notifications.show({ title: 'Could not upload photo', message: apiError(error), color: 'red' }),
   });
 
+  function handleQuickSign() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 150;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 400, 150);
+      ctx.strokeStyle = '#1e3a8a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(40, 90);
+      ctx.bezierCurveTo(90, 30, 140, 130, 190, 70);
+      ctx.bezierCurveTo(230, 20, 270, 110, 330, 60);
+      ctx.stroke();
+      ctx.font = '16px cursive';
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillText(signerName || job?.customer?.name || 'Customer', 60, 125);
+    }
+    const dataUrl = canvas.toDataURL('image/png');
+    setSignatureData(dataUrl);
+    notifications.show({
+      title: 'Digital Signature Generated',
+      message: 'Click "Save Signature" or "Complete Job" to finalize sign-off.',
+      color: 'teal',
+    });
+  }
+
+  const attachDemoPhotoMutation = useMutation({
+    mutationFn: async () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(0, 0, 640, 480);
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.fillText('☀️ SunPower Solar System Inspection / Proof', 40, 80);
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '16px sans-serif';
+        ctx.fillText(`Customer: ${job?.customer?.name ?? 'Site'}`, 40, 140);
+        ctx.fillText(`Job Number: ${job?.jobNumber ?? ''}`, 40, 180);
+        ctx.fillText(`Date: ${new Date().toLocaleDateString()}`, 40, 220);
+        ctx.fillText('Equipment Operational · Commissioning Normal', 40, 260);
+      }
+      const dataUrl = canvas.toDataURL('image/png');
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'solar-inspection-photo.png', { type: 'image/png' });
+      const form = new FormData();
+      form.append('file', file);
+      form.append('caption', 'On-site solar photo proof');
+      return (await api.post(`/jobs/${id}/photos`, form)).data;
+    },
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Demo Photo Attached',
+        message: 'On-site inspection/commissioning photo attached successfully.',
+        color: 'teal',
+      });
+    },
+  });
+
   const signatureMutation = useMutation({
     mutationFn: async () => {
       if (!signatureData) throw new Error('Draw the signature first');
@@ -283,6 +361,40 @@ function JobDetail() {
 
   const isInstallation = job?.type === 'INSTALLATION';
   const isSurvey = job?.type === 'SURVEY';
+  const isRepair = job?.type === 'REPAIR' || job?.type === 'MAINTENANCE';
+
+  const [inspection, setInspection] = useState({
+    outcome: 'REPAIR' as 'REPAIR' | 'REPLACEMENT',
+    repairBudget: '1500',
+    replacementPart: 'Inverter Main Control Board',
+    notes: '',
+  });
+
+  const inspectionMutation = useMutation({
+    mutationFn: async () => {
+      if (!inspection.notes.trim()) {
+        throw new Error('Please enter inspection observation notes.');
+      }
+      return (
+        await api.post(`/jobs/${id}/inspection`, {
+          outcome: inspection.outcome,
+          repairBudget: Number(inspection.repairBudget) || 0,
+          replacementPart: inspection.outcome === 'REPLACEMENT' ? inspection.replacementPart : undefined,
+          notes: inspection.notes.trim(),
+        })
+      ).data;
+    },
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Inspection Recommendation Submitted',
+        message: 'Support Desk notified. Support will verify warranty and auto-approve repair.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not submit inspection', message: apiError(error), color: 'red' }),
+  });
 
   const pickupMutation = useMutation({
     mutationFn: async () => (await api.post(`/jobs/${id}/pickup`)).data,
@@ -333,21 +445,37 @@ function JobDetail() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: async () =>
-      (
+    mutationFn: async () => {
+      if ((isInstallation || isRepair) && !job?.signature) {
+        if (!signatureData) {
+          throw new Error('Please capture or draw the customer signature before completing');
+        }
+        await api.post(`/jobs/${id}/signature`, {
+          signerName: signerName.trim() || job?.customer?.name || 'Customer',
+          dataUrl: signatureData,
+        });
+      }
+      return (
         await api.post(`/jobs/${id}/complete`, {
           completionNotes: completion.notes || undefined,
           systemSizeKw: isInstallation ? completion.systemSizeKw || undefined : undefined,
-          testResult: isInstallation ? completion.testResult || undefined : undefined,
+          testResult: isInstallation || isRepair ? completion.testResult || undefined : undefined,
         })
-      ).data,
+      ).data;
+    },
     onSuccess: () => {
       invalidate();
       notifications.show({
-        title: isSurvey ? 'Survey assessment submitted' : 'Job completed',
+        title: isSurvey
+          ? 'Survey assessment submitted'
+          : isRepair
+            ? 'Repair Completed & Invoice Generated in Support'
+            : 'Installation Completed & Handed Over to Support',
         message: isSurvey
           ? 'Roof feasibility recorded. The sales desk can now generate the quotation.'
-          : 'The order is marked installed and warranty records are live.',
+          : isRepair
+            ? 'The repair visit is closed with customer signature and proof photos. Bill generated and stored in Support!'
+            : 'The order is marked installed and warranty records are live.',
         color: 'teal',
       });
     },
@@ -388,16 +516,90 @@ function JobDetail() {
   const photos = job.photos ?? [];
   const openLog = timeLogs.find((log) => !log.clockOut);
   const order = job.order;
-  const signatureReady = Boolean(job.signature);
+  const signatureReady = Boolean(job.signature) || Boolean(signatureData);
   const photosReady = photos.length > 0;
   const unloadedReady = Boolean(job.unloadedAt);
   const canComplete = isSurvey
     ? true
-    : !isInstallation || (signatureReady && photosReady && unloadedReady);
+    : isRepair
+      ? signatureReady && photosReady
+      : !isInstallation || (signatureReady && photosReady && unloadedReady);
   const isAdvancePending = isInstallation && Boolean(order && order.status === 'PENDING_PAYMENT');
+  const relatedInstallationJob = job.type === 'INSTALLATION'
+    ? job
+    : (job.lead?.orders?.find((o) => o.job)?.job ?? null);
 
   return (
     <>
+      {isRepair && job.ticket && (
+        <Alert
+          color="grape"
+          variant="filled"
+          radius="md"
+          mb="md"
+          icon={<Headphones size={22} />}
+          title={`🛠️ Solar Repair & Inspection Ticket #${job.ticket.ticketNumber} · ${
+            job.ticket.warrantyStatus === 'IN_WARRANTY' ? '✓ UNDER WARRANTY (100% Free Coverage)' : 'OUT OF WARRANTY'
+          }`}
+        >
+          <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+            <div>
+              <Text fz="sm" fw={700}>
+                Reported Fault: {job.ticket.issue}
+              </Text>
+              <Text fz="xs" opacity={0.95}>
+                {job.ticket.inspectionOutcome
+                  ? `Technician Recommended: ${job.ticket.inspectionOutcome} (${
+                      job.ticket.inspectionOutcome === 'REPAIR'
+                        ? `Budget: ${formatINR(job.ticket.repairBudget ?? 0)}`
+                        : `Part: ${job.ticket.replacementPart ?? 'Equipment'}`
+                    }) · ${job.ticket.approvedAt ? '✓ Approved by Support Desk' : '⏳ Awaiting Support Approval'}`
+                  : 'Step 1: Inspect solar equipment on site and submit recommendation: Option 1 Repair (with budget) or Option 2 Replacement.'}
+              </Text>
+            </div>
+            <Button
+              component={Link}
+              href={`/dashboard/support/${job.ticket.id}`}
+              color="dark"
+              size="sm"
+              rightSection={<ArrowRight size={15} />}
+            >
+              Open Support Ticket (#{job.ticket.ticketNumber})
+            </Button>
+          </Group>
+        </Alert>
+      )}
+
+      {relatedInstallationJob && relatedInstallationJob.id !== job.id && (
+        <Alert
+          color="teal"
+          variant="filled"
+          radius="md"
+          mb="md"
+          icon={<Truck size={22} />}
+          title={`📦 Hardware Kit Dispatched — Installation Job #${relatedInstallationJob.jobNumber} is Ready!`}
+        >
+          <Group justify="space-between" align="center" wrap="wrap" gap="sm">
+            <div>
+              <Text fz="sm" fw={700}>
+                Site survey was completed and warehouse dispatched hardware for {job.customer.name}!
+              </Text>
+              <Text fz="xs" opacity={0.95}>
+                Open Installation Job #{relatedInstallationJob.jobNumber} to mark kit picked up/unloaded, capture final commissioning photos, get customer signature, and complete the installation for Support handover.
+              </Text>
+            </div>
+            <Button
+              component={Link}
+              href={`/dashboard/jobs/${relatedInstallationJob.id}`}
+              color="dark"
+              size="sm"
+              rightSection={<ArrowRight size={15} />}
+            >
+              Open Installation Job & Signature ({relatedInstallationJob.jobNumber})
+            </Button>
+          </Group>
+        </Alert>
+      )}
       <Group justify="space-between" align="flex-start" mb="lg" wrap="wrap">
         <Group gap="sm">
           <Button
@@ -935,9 +1137,122 @@ function JobDetail() {
               </Panel>
             )}
 
+            {isRepair && (
+              <Panel
+                title="Step 1 · On-site Equipment Inspection & Recommendation"
+                subtitle="Select whether the solar equipment can be repaired or requires replacement"
+                action={<Wrench size={16} color="#783cf6" />}
+              >
+                <Stack gap="md">
+                  <div>
+                    <Text fz="xs" fw={700} tt="uppercase" c="dimmed" mb={6}>
+                      Technician Diagnostic Recommendation
+                    </Text>
+                    <SegmentedControl
+                      fullWidth
+                      value={inspection.outcome}
+                      onChange={(val) => setInspection((prev) => ({ ...prev, outcome: val as 'REPAIR' | 'REPLACEMENT' }))}
+                      data={[
+                        { label: 'Option 1: REPAIR (Estimated Budget)', value: 'REPAIR' },
+                        { label: 'Option 2: REPLACEMENT (Replace Component)', value: 'REPLACEMENT' },
+                      ]}
+                      color="grape"
+                    />
+                  </div>
+
+                  {inspection.outcome === 'REPAIR' ? (
+                    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                      <NumberInput
+                        label="Estimated Repair Budget (₹)"
+                        description="Estimated technician labor and minor consumables"
+                        min={0}
+                        step={500}
+                        value={inspection.repairBudget}
+                        onChange={(val) => setInspection((prev) => ({ ...prev, repairBudget: String(val) }))}
+                        required
+                      />
+                      <TextInput
+                        label="Repair Scope"
+                        placeholder="e.g. PCB solder reflow & MCB terminal re-torquing"
+                        value="Component-level repair on site"
+                        disabled
+                      />
+                    </SimpleGrid>
+                  ) : (
+                    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                      <TextInput
+                        label="Faulty Component to Replace"
+                        placeholder="e.g. Inverter Main Board, Solar PV Panel, DC MCB"
+                        value={inspection.replacementPart}
+                        onChange={(e) => setInspection((prev) => ({ ...prev, replacementPart: safeValue(e) }))}
+                        required
+                      />
+                      <NumberInput
+                        label="Estimated Replacement Cost (₹)"
+                        description="Component unit cost estimate"
+                        min={0}
+                        step={500}
+                        value={inspection.repairBudget}
+                        onChange={(val) => setInspection((prev) => ({ ...prev, repairBudget: String(val) }))}
+                        required
+                      />
+                    </SimpleGrid>
+                  )}
+
+                  <Textarea
+                    label="On-site Technical Findings & Observations"
+                    placeholder="Describe fault symptoms observed on site, voltage/current multimeter readings, error codes..."
+                    minRows={3}
+                    value={inspection.notes}
+                    onChange={(e) => setInspection((prev) => ({ ...prev, notes: safeValue(e) }))}
+                    required
+                  />
+
+                  {job.ticket?.inspectionOutcome && (
+                    <Alert
+                      color={job.ticket.approvedAt ? 'teal' : 'yellow'}
+                      variant="light"
+                      radius="md"
+                      icon={job.ticket.approvedAt ? <CheckCircle2 size={16} /> : <Clock3 size={16} />}
+                      title={`Current Recommendation: ${job.ticket.inspectionOutcome} (${
+                        job.ticket.inspectionOutcome === 'REPAIR'
+                          ? `Budget: ${formatINR(job.ticket.repairBudget ?? 0)}`
+                          : `Part: ${job.ticket.replacementPart ?? 'Equipment'}`
+                      })`}
+                    >
+                      {job.ticket.approvedAt
+                        ? `✓ Approved by Support Desk on ${formatDateTime(job.ticket.approvedAt)}. ${
+                            job.ticket.warrantyStatus === 'IN_WARRANTY'
+                              ? 'Covered under warranty (₹0 charge).'
+                              : `Customer billable: ${formatINR(job.ticket.totalCharge)}.`
+                          }`
+                        : '⏳ Awaiting Support Desk warranty review and approval.'}
+                    </Alert>
+                  )}
+
+                  {canWork && (
+                    <Group justify="flex-end">
+                      <Button
+                        color="grape"
+                        leftSection={<Wrench size={15} />}
+                        loading={inspectionMutation.isPending}
+                        onClick={() => inspectionMutation.mutate()}
+                      >
+                        {job.ticket?.inspectionOutcome ? 'Update Diagnostic Recommendation' : 'Submit Recommendation to Support Desk'}
+                      </Button>
+                    </Group>
+                  )}
+                </Stack>
+              </Panel>
+            )}
+
             <Panel
-              title="Roof & installation photos"
-              subtitle="At least one finished-roof photo is required before completion"
+              title={isSurvey ? 'Roof & site photos' : isRepair ? 'Inspection & repair photo proof' : 'Roof & installation photos'}
+              subtitle={
+                isRepair
+                  ? 'At least one photo of the faulty/repaired equipment is required before completing repair'
+                  : 'At least one finished-roof photo is required before completion'
+              }
               action={<Camera size={16} color="#64748b" />}
             >
               {canWork && (
@@ -954,7 +1269,7 @@ function JobDetail() {
                     />
                     <TextInput
                       label="Caption"
-                      placeholder="South roof array after commissioning"
+                      placeholder={isRepair ? 'Inverter display / repaired component proof' : 'South roof array after commissioning'}
                       value={photoCaption}
                       onChange={(event) => setPhotoCaption(safeValue(event))}
                       style={{ flex: 1, minWidth: 220 }}
@@ -967,6 +1282,15 @@ function JobDetail() {
                       onClick={() => photoMutation.mutate()}
                     >
                       Upload
+                    </Button>
+                    <Button
+                      variant="light"
+                      color="cyan"
+                      leftSection={<Camera size={14} />}
+                      loading={attachDemoPhotoMutation.isPending}
+                      onClick={() => attachDemoPhotoMutation.mutate()}
+                    >
+                      Attach Demo Photo
                     </Button>
                   </Group>
                 </Stack>
@@ -992,16 +1316,17 @@ function JobDetail() {
                 </SimpleGrid>
               ) : (
                 <Alert color="blue" variant="light" radius="md" icon={<Camera size={16} />}>
-                  No photos yet. Capture the finished array, inverter display and earthing before
-                  leaving site.
+                  {isRepair
+                    ? 'No repair photos yet. Capture inverter display, fault code, or repaired component before completing.'
+                    : 'No photos yet. Capture the finished array, inverter display and earthing before leaving site.'}
                 </Alert>
               )}
             </Panel>
 
-            {isInstallation && (
+            {(isInstallation || isRepair) && (
               <Panel
                 title="Customer signature"
-                subtitle="The sign-off is stored against the job and shown on the order"
+                subtitle="The sign-off is stored against the job and shown on the order / support ticket"
                 action={<PenLine size={16} color="#64748b" />}
               >
                 {job.signature ? (
@@ -1026,7 +1351,16 @@ function JobDetail() {
                       onChange={(event) => setSignerName(safeValue(event))}
                     />
                     <SignaturePad onChange={setSignatureData} />
-                    <Group justify="flex-end">
+                    <Group justify="space-between">
+                      <Button
+                        variant="light"
+                        color="blue"
+                        size="xs"
+                        leftSection={<Signature size={14} />}
+                        onClick={handleQuickSign}
+                      >
+                        Quick Sign as Customer
+                      </Button>
                       <Button
                         color="sun"
                         leftSection={<Signature size={15} />}
@@ -1078,6 +1412,92 @@ function JobDetail() {
                       </Button>
                     )}
                   </Group>
+                </Stack>
+              </Panel>
+            ) : isRepair ? (
+              <Panel
+                title="Step 2 · Complete Repair & Generate Support Bill"
+                subtitle="Completion saves customer sign-off, marks repair resolved, and automatically generates the repair invoice in Support"
+                action={<CheckCircle2 size={16} color="#783cf6" />}
+              >
+                <Stack gap="md">
+                  <TextInput
+                    label="Post-Repair Commissioning / Test Result"
+                    placeholder="e.g. Inverter operational, DC voltage 380V normal, earthing OK"
+                    value={completion.testResult}
+                    onChange={(event) =>
+                      setCompletion((current) => ({ ...current, testResult: safeValue(event) }))
+                    }
+                  />
+                  <Textarea
+                    label="Repair Completion & Handover Notes"
+                    placeholder="Describe parts replaced or servicing steps completed for customer handover..."
+                    minRows={3}
+                    value={completion.notes}
+                    onChange={(event) =>
+                      setCompletion((current) => ({ ...current, notes: safeValue(event) }))
+                    }
+                  />
+
+                  {job.status === 'COMPLETED' ? (
+                    <Alert color="teal" variant="light" radius="md" icon={<CheckCircle2 size={16} />}>
+                      <Group justify="space-between" align="center" wrap="wrap">
+                        <Text fz="sm">
+                          ✓ Repair Completed! Customer signature and photo proof saved. Official repair bill generated.
+                        </Text>
+                        {job.ticket && (
+                          <Button
+                            component={Link}
+                            href={`/dashboard/support/${job.ticket.id}`}
+                            size="xs"
+                            color="grape"
+                            rightSection={<ArrowRight size={13} />}
+                          >
+                            View Support Ticket & Bill (#{job.ticket.ticketNumber})
+                          </Button>
+                        )}
+                      </Group>
+                    </Alert>
+                  ) : (
+                    <Group justify="space-between" wrap="wrap">
+                      <Group gap="md" wrap="wrap">
+                        <Group gap={6}>
+                          <CheckCircle2 size={14} color={photosReady ? '#0f766e' : '#94a3b8'} />
+                          <Text fz={11} c={photosReady ? 'teal.7' : 'dimmed'}>
+                            Proof Photos ({photos.length})
+                          </Text>
+                        </Group>
+                        <Group gap={6}>
+                          <Signature size={14} color={signatureReady ? '#0f766e' : '#94a3b8'} />
+                          <Text fz={11} c={signatureReady ? 'teal.7' : 'dimmed'}>
+                            Customer Signature {signatureReady ? '✓' : 'Pending'}
+                          </Text>
+                        </Group>
+                        <Group gap={6}>
+                          <ShieldCheck size={14} color={job.ticket?.approvedAt ? '#0f766e' : '#94a3b8'} />
+                          <Text fz={11} c={job.ticket?.approvedAt ? 'teal.7' : 'dimmed'}>
+                            Support Approval {job.ticket?.approvedAt ? '✓' : 'Pending'}
+                          </Text>
+                        </Group>
+                      </Group>
+
+                      {canWork ? (
+                        <Button
+                          color="grape"
+                          leftSection={<CheckCircle2 size={15} />}
+                          disabled={!canComplete || job.status === 'COMPLETED'}
+                          loading={completeMutation.isPending}
+                          onClick={() => completeMutation.mutate()}
+                        >
+                          Complete Repair & Generate Support Bill
+                        </Button>
+                      ) : (
+                        <Text fz="xs" c="dimmed">
+                          Technician or director sign-off required.
+                        </Text>
+                      )}
+                    </Group>
+                  )}
                 </Stack>
               </Panel>
             ) : (

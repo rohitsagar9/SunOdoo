@@ -238,7 +238,7 @@ export function RecordOfflinePaymentModal({
         )}
 
         {selectedOrder && (
-          <Paper p="sm" withBorder radius="md" bg="var(--sp-card-muted, #f8fafc)">
+          <Paper p="sm" withBorder radius="md" style={{ background: 'var(--sp-card-subtle)', borderColor: 'var(--sp-border)' }}>
             <Group justify="space-between" align="flex-start" wrap="wrap">
               <div>
                 <Group gap="xs">

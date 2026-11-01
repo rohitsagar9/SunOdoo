@@ -66,6 +66,7 @@ export const quoteRoutes: FastifyPluginAsync = async (app) => {
           capacityKw: z.coerce.number().int().min(1).max(5).optional(),
           systemType: z.enum(['ON_GRID', 'OFF_GRID']).optional(),
           discount: z.coerce.number().int().min(0).optional(),
+          discountPercent: z.coerce.number().min(0).max(50).optional(),
           notes: z.string().max(2000).optional(),
         })
         .parse(request.body);
@@ -76,6 +77,7 @@ export const quoteRoutes: FastifyPluginAsync = async (app) => {
         capacityKw: body.capacityKw,
         systemType: body.systemType,
         discount: body.discount,
+        discountPercent: body.discountPercent,
         notes: body.notes,
       });
 
@@ -93,6 +95,7 @@ export const quoteRoutes: FastifyPluginAsync = async (app) => {
           capacityKw: z.coerce.number().int().min(1).max(5).optional(),
           systemType: z.enum(['ON_GRID', 'OFF_GRID']).optional(),
           discount: z.coerce.number().int().min(0).optional(),
+          discountPercent: z.coerce.number().min(0).max(50).optional(),
         })
         .parse(request.body);
 
@@ -102,7 +105,13 @@ export const quoteRoutes: FastifyPluginAsync = async (app) => {
 
       const capacityKw = body.capacityKw ?? quote.capacityKw;
       const systemType = body.systemType ?? quote.systemType;
-      const priced = await priceBom(capacityKw, systemType, body.discount ?? quote.discount);
+      const priced = await priceBom(
+        capacityKw,
+        systemType,
+        body.discount ?? quote.discount,
+        quote.taxRate,
+        body.discountPercent ?? quote.discountPercent ?? 0,
+      );
 
       const updated = await prisma.quote.update({
         where: { id },
@@ -111,6 +120,7 @@ export const quoteRoutes: FastifyPluginAsync = async (app) => {
           systemType,
           subtotal: priced.subtotal,
           discount: priced.discount,
+          discountPercent: priced.discountPercent,
           taxRate: priced.taxRate,
           taxAmount: priced.taxAmount,
           total: priced.total,

@@ -279,14 +279,16 @@ function InventoryWorkspace() {
                 >
                   Receive stock
                 </Button>
-                <Button
-                  variant="light"
-                  color="orange"
-                  leftSection={<Send size={15} />}
-                  onClick={() => setRestockOpen(true)}
-                >
-                  Request restock
-                </Button>
+                {user?.role !== 'DIRECTOR' && (
+                  <Button
+                    variant="light"
+                    color="orange"
+                    leftSection={<Send size={15} />}
+                    onClick={() => setRestockOpen(true)}
+                  >
+                    Request restock
+                  </Button>
+                )}
               </>
             )}
             <Button
@@ -639,7 +641,11 @@ function InventoryWorkspace() {
             ) : restockRequests.length === 0 ? (
               <EmptyState
                 title="No restock requests"
-                description="Click 'Request restock' above when materials are low to send a procurement request to the Director."
+                description={
+                  user?.role === 'DIRECTOR'
+                    ? 'No pending restock requests awaiting Director approval. Warehouse stock replenishment is up to date.'
+                    : "Click 'Request restock' above when materials are low to send a procurement request to the Director."
+                }
               />
             ) : (
               <ScrollArea>

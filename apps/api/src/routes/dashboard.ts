@@ -636,7 +636,6 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           prisma.order.findMany({
             where: {
               status: { in: ['INSTALLED', 'COMPLETED'] },
-              balanceDue: { lte: 0 },
             },
             include: {
               customer: true,
@@ -691,6 +690,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
           systemSizeKw: (o.quote as any)?.capacityKw ?? (o.quote as any)?.systemSizeKw ?? 5,
           systemType: o.quote?.systemType ?? 'ON_GRID',
           total: o.total,
+          balanceDue: o.balanceDue,
           installedAt: (o.installedAt || o.completedAt || o.updatedAt).toISOString(),
           completedAt: (o.completedAt || o.installedAt || o.updatedAt).toISOString(),
           status: isMaintenance ? ('MAINTENANCE' as const) : ('PENDING' as const),
@@ -758,9 +758,9 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(404).send({ error: 'Order not found' });
       }
 
-      if (!['INSTALLED', 'COMPLETED'].includes(order.status) || order.balanceDue > 0) {
+      if (!['INSTALLED', 'COMPLETED'].includes(order.status)) {
         return reply.status(400).send({
-          error: 'Order must be fully paid and installation completed before support handover',
+          error: 'Order must be installed before support handover',
         });
       }
 
@@ -776,7 +776,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
       if (!existingLog) {
         await prisma.auditLog.create({
           data: {
-            userId: req.user.id,
+            userId: req.user.sub,
             action: 'SUPPORT_CONGRATS_SENT',
             entity: 'Order',
             entityId: order.id,

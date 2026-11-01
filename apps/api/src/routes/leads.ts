@@ -341,6 +341,8 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
           shadowFreeAreaSqft: z.coerce.number().int().min(0).max(100000).optional(),
           findings: z.string().max(3000).optional(),
           approved: z.boolean().optional(),
+          technicianAssessment: z.enum(['FEASIBLE', 'NOT_FEASIBLE']).optional(),
+          overrideReason: z.string().max(1000).optional(),
           rejectionReasons: z.array(z.string()).optional(),
           technicianId: z.string().optional(),
         })
@@ -369,6 +371,7 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
 
       if (
         body.approved === undefined &&
+        !body.technicianAssessment &&
         !body.rejectionReasons &&
         !body.roofDirection &&
         body.tiltDegrees == null &&
@@ -394,10 +397,12 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
             cableDistanceM: body.cableDistanceM,
             shadowFreeAreaSqft: body.shadowFreeAreaSqft,
             approved: body.approved ?? survey.approved,
+            technicianAssessment: body.technicianAssessment ?? survey.technicianAssessment,
+            overrideReason: body.overrideReason ?? survey.overrideReason,
             findings: combinedFindings ?? survey.findings,
             technicianId: body.technicianId ?? survey.technicianId,
             completedAt:
-              body.roofDirection || body.tiltDegrees || body.cableDistanceM || body.approved !== undefined
+              body.roofDirection || body.tiltDegrees || body.cableDistanceM || body.approved !== undefined || body.technicianAssessment !== undefined
                 ? new Date()
                 : survey.completedAt,
           },
@@ -435,6 +440,141 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       });
 
       await audit(request.user.sub, 'SURVEY_UPDATED', 'Survey', id, body);
+      return updated;
+    },
+  );
+
+  app.post(
+    '/surveys/:id/sales-decision',
+    { preHandler: [app.authenticate, app.authorize('SALES', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z
+        .object({
+          decision: z.enum(['OVERRIDE_TO_FEASIBLE', 'CONFIRM_NOT_FEASIBLE', 'CONFIRM_FEASIBLE']),
+          reason: z.string().max(1000).optional(),
+        })
+        .parse(request.body);
+
+      const survey = await prisma.survey.findUnique({ where: { id }, include: { lead: true } });
+      if (!survey) throw notFound('Survey');
+
+      if (body.decision === 'OVERRIDE_TO_FEASIBLE') {
+        if (!body.reason || body.reason.trim().length < 5) {
+          throw badRequest('Please provide a detailed explanation of why the technical rejection is being overridden.');
+        }
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const s = await tx.survey.update({
+            where: { id },
+            data: {
+              approved: true,
+              overrideReason: body.reason,
+              technicianAssessment: survey.technicianAssessment ?? 'NOT_FEASIBLE',
+              completedAt: survey.completedAt ?? new Date(),
+            },
+            include: { lead: true },
+          });
+
+          await tx.lead.update({
+            where: { id: survey.leadId },
+            data: { status: 'SURVEY_COMPLETED' },
+          });
+
+          const surveyJob = await tx.job.findFirst({
+            where: { leadId: survey.leadId, type: 'SURVEY' },
+          });
+          if (surveyJob) {
+            await tx.job.update({
+              where: { id: surveyJob.id },
+              data: {
+                status: 'COMPLETED',
+                completedAt: new Date(),
+                completionNotes: `Overridden to Feasible by Sales: ${body.reason}`,
+              },
+            });
+          }
+
+          return s;
+        });
+
+        await audit(request.user.sub, 'SURVEY_SALES_OVERRIDE', 'Survey', id, { reason: body.reason });
+        return updated;
+      }
+
+      if (body.decision === 'CONFIRM_NOT_FEASIBLE') {
+        const rejectionNote = body.reason || survey.findings || 'Site inspected and confirmed not feasible for solar installation.';
+        const updated = await prisma.$transaction(async (tx) => {
+          const s = await tx.survey.update({
+            where: { id },
+            data: {
+              approved: false,
+              technicianAssessment: 'NOT_FEASIBLE',
+              completedAt: survey.completedAt ?? new Date(),
+            },
+            include: { lead: true },
+          });
+
+          await tx.lead.update({
+            where: { id: survey.leadId },
+            data: { status: 'LOST', lostReason: rejectionNote },
+          });
+
+          const surveyJob = await tx.job.findFirst({
+            where: { leadId: survey.leadId, type: 'SURVEY' },
+          });
+          if (surveyJob) {
+            await tx.job.update({
+              where: { id: surveyJob.id },
+              data: {
+                status: 'COMPLETED',
+                completedAt: new Date(),
+                completionNotes: `Confirmed Not Feasible: ${rejectionNote}`,
+              },
+            });
+          }
+
+          return s;
+        });
+
+        await audit(request.user.sub, 'SURVEY_SALES_REJECTED', 'Survey', id, { reason: rejectionNote });
+        return updated;
+      }
+
+      // CONFIRM_FEASIBLE
+      const updated = await prisma.$transaction(async (tx) => {
+        const s = await tx.survey.update({
+          where: { id },
+          data: {
+            approved: true,
+            technicianAssessment: 'FEASIBLE',
+            completedAt: survey.completedAt ?? new Date(),
+          },
+          include: { lead: true },
+        });
+
+        await tx.lead.update({
+          where: { id: survey.leadId },
+          data: { status: 'SURVEY_COMPLETED' },
+        });
+
+        const surveyJob = await tx.job.findFirst({
+          where: { leadId: survey.leadId, type: 'SURVEY' },
+        });
+        if (surveyJob) {
+          await tx.job.update({
+            where: { id: surveyJob.id },
+            data: {
+              status: 'COMPLETED',
+              completedAt: new Date(),
+            },
+          });
+        }
+
+        return s;
+      });
+
+      await audit(request.user.sub, 'SURVEY_SALES_CONFIRMED', 'Survey', id);
       return updated;
     },
   );

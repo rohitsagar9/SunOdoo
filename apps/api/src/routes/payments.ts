@@ -268,4 +268,139 @@ export const paymentRoutes: FastifyPluginAsync = async (app) => {
       return payment;
     },
   );
+
+  app.post(
+    '/payments/offline-cash',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'SALES', 'DIRECTOR')] },
+    async (request, reply) => {
+      const body = z
+        .object({
+          orderId: z.string().min(1),
+          amount: z.coerce.number().int().positive(),
+          credibilityConfirmed: z.literal(true),
+          notes: z.string().max(500).optional(),
+        })
+        .parse(request.body);
+
+      const order = await prisma.order.findUnique({
+        where: { id: body.orderId },
+        include: { payments: true },
+      });
+      if (!order) throw notFound('Order');
+
+      const approvedPaid = order.payments
+        .filter((p) => p.status === 'APPROVED')
+        .reduce((sum, p) => sum + p.amount, 0);
+      const balance = Math.max(order.total - approvedPaid, 0);
+
+      const type = approvedPaid === 0 ? (body.amount >= balance ? 'FULL' : 'ADVANCE') : 'BALANCE';
+
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: body.orderId,
+          amount: body.amount,
+          method: 'CASH',
+          type,
+          status: 'PENDING',
+          credibilityConfirmed: true,
+          cashDepositVerified: false,
+          submittedById: request.user.sub,
+          notes: body.notes || 'Technician collected offline cash on site. Custody credibility confirmed.',
+        },
+        include: paymentInclude,
+      });
+
+      await audit(request.user.sub, 'OFFLINE_CASH_COLLECTED', 'Payment', payment.id, {
+        orderId: body.orderId,
+        amount: body.amount,
+        credibilityConfirmed: true,
+      });
+
+      return reply.code(201).send(payment);
+    },
+  );
+
+  app.post(
+    '/payments/:id/verify-cash',
+    { preHandler: [app.authenticate, app.authorize('SALES', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const existing = await prisma.payment.findUnique({
+        where: { id },
+        include: { order: true },
+      });
+      if (!existing) throw notFound('Payment');
+      if (existing.method !== 'CASH') {
+        throw new AppError(400, 'This endpoint is for offline cash verification only.', 'INVALID_PAYMENT_TYPE');
+      }
+
+      const payment = await prisma.payment.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          cashDepositVerified: true,
+          approvedById: request.user.sub,
+          approvedAt: new Date(),
+        },
+        include: paymentInclude,
+      });
+
+      if (existing.orderId) {
+        const calc = await recalcOrder(existing.orderId);
+        await prisma.order.update({
+          where: { id: existing.orderId },
+          data: {
+            advancePaid: calc.advancePaid,
+            balanceDue: calc.balanceDue,
+            status: calc.status,
+            completedAt: calc.status === 'COMPLETED' ? (calc.order.completedAt ?? new Date()) : undefined,
+            approvedById: request.user.sub,
+            approvedAt: new Date(),
+          },
+        });
+        await ensureInstallationJob(existing.orderId, request.user.sub);
+
+        if (calc.balanceDue === 0) {
+          const invoice = await prisma.invoice.findFirst({ where: { orderId: existing.orderId } });
+          if (invoice && invoice.status !== 'PAID') {
+            await prisma.invoice.update({
+              where: { id: invoice.id },
+              data: { status: 'PAID', paidAt: new Date() },
+            });
+          }
+        }
+      }
+
+      await audit(request.user.sub, 'OFFLINE_CASH_VERIFIED', 'Payment', id, {
+        orderId: existing.orderId,
+        amount: existing.amount,
+      });
+
+      return payment;
+    },
+  );
+
+  app.post(
+    '/payments/:id/nudge-office',
+    { preHandler: [app.authenticate, app.authorize('TECHNICIAN', 'SALES', 'DIRECTOR')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const payment = await prisma.payment.findUnique({
+        where: { id },
+        include: { order: { include: { customer: true } } },
+      });
+      if (!payment) throw notFound('Payment');
+
+      await audit(request.user.sub, 'OFFICE_CASH_NUDGE_SENT', 'Payment', id, {
+        amount: payment.amount,
+        orderNumber: payment.order?.orderNumber,
+        customerName: payment.order?.customer?.name,
+      });
+
+      return {
+        success: true,
+        message: 'Reminder sent to office desk to verify and confirm physical cash deposit.',
+      };
+    },
+  );
 };

@@ -349,7 +349,7 @@ export const orderRoutes: FastifyPluginAsync = async (app) => {
               type: 'INSTALLATION',
               status: 'SCHEDULED',
               technicianId: technician?.id,
-              scheduledDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+              scheduledDate: now,
               scheduledSlot: '09:00 - 13:00',
               notes: `Installation for ${order.customer.name}. Auto-created upon dispatch.`,
             },

@@ -152,6 +152,21 @@ function OrderDetail() {
       notifications.show({ title: 'Could not dispatch', message: apiError(error), color: 'red' }),
   });
 
+  const verifyCashMutation = useMutation({
+    mutationFn: async (paymentId: string) =>
+      (await api.post(`/payments/${paymentId}/verify-cash`)).data,
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Cash Deposit Verified',
+        message: 'Physical cash received in office. Order advance and balance updated.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not verify cash', message: apiError(error), color: 'red' }),
+  });
+
   if (query.isLoading) return <LoadingState label="Loading the order…" />;
   if (query.isError) {
     return <Alert color="red" title="Could not load order">{apiError(query.error)}</Alert>;
@@ -403,8 +418,40 @@ function OrderDetail() {
 
       {order.status === 'PENDING_PAYMENT' && (
         <Alert color="orange" title="Advance payment still pending" mb="md" radius="md">
-          The order is in the warehouse queue only after the office approves the customer's advance
+          The order is in the warehouse queue only after the office approves the customer&apos;s advance
           payment.
+        </Alert>
+      )}
+
+      {order.job?.pickedUpAt && (
+        <Alert
+          color={order.job.unloadedAt ? 'teal' : 'blue'}
+          variant="light"
+          icon={<Truck size={18} />}
+          mb="md"
+          radius="md"
+          title={order.job.unloadedAt ? 'Hardware Kit Unloaded on Site' : 'Hardware Kit Collected by Technician'}
+        >
+          <Text fz="xs">
+            {order.job.unloadedAt
+              ? `Equipment safely arrived and unloaded on site on ${formatDateTime(order.job.unloadedAt)}. Installation in progress.`
+              : `Technician picked up the kit from warehouse on ${formatDateTime(order.job.pickedUpAt)}. En route to site.`}
+          </Text>
+        </Alert>
+      )}
+
+      {order.status === 'INSTALLED' && order.balanceDue > 0 && (
+        <Alert
+          color="orange"
+          variant="light"
+          icon={<AlertTriangle size={18} />}
+          mb="md"
+          radius="md"
+          title={`Balance Settlement Pending: ${formatINR(order.balanceDue)}`}
+        >
+          <Text fz="xs">
+            Installation is finished on site, but remaining balance of {formatINR(order.balanceDue)} is pending collection. Sales and office follow-up required.
+          </Text>
         </Alert>
       )}
 
@@ -736,22 +783,41 @@ function OrderDetail() {
             >
               <Stack gap="sm">
                 {payments.map((payment) => (
-                  <Group key={payment.id} justify="space-between" wrap="nowrap">
-                    <div>
-                      <Text fz="xs" fw={600}>
-                        {titleCase(payment.type)} · {titleCase(payment.method)}
-                      </Text>
-                      <Text fz={10} c="dimmed">
-                        {formatDateTime(payment.createdAt)}
-                      </Text>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <Text fz="xs" fw={700} className="sp-mono">
-                        {formatINR(payment.amount)}
-                      </Text>
-                      <StatusBadge status={payment.status} size="xs" />
-                    </div>
-                  </Group>
+                  <Paper key={payment.id} p={6} withBorder style={{ borderRadius: 8, background: 'var(--sp-card)' }}>
+                    <Group justify="space-between" wrap="nowrap" mb={4}>
+                      <div>
+                        <Text fz="xs" fw={600}>
+                          {titleCase(payment.type)} · {titleCase(payment.method)}
+                        </Text>
+                        <Text fz={10} c="dimmed">
+                          {formatDateTime(payment.createdAt)}
+                        </Text>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <Text fz="xs" fw={700} className="sp-mono">
+                          {formatINR(payment.amount)}
+                        </Text>
+                        <StatusBadge status={payment.status} size="xs" />
+                      </div>
+                    </Group>
+                    {payment.method === 'CASH' && payment.credibilityConfirmed && (
+                      <Group justify="space-between" mt={4} wrap="wrap">
+                        <Badge size="xs" color={payment.cashDepositVerified ? 'teal' : 'orange'} variant="light">
+                          {payment.cashDepositVerified ? 'Cash Deposited in Office' : 'Technician Credibility Taken'}
+                        </Badge>
+                        {payment.status === 'PENDING' && (
+                          <Button
+                            size="compact-xs"
+                            color="teal"
+                            loading={verifyCashMutation.isPending}
+                            onClick={() => verifyCashMutation.mutate(payment.id)}
+                          >
+                            Confirm Cash Received & Approve
+                          </Button>
+                        )}
+                      </Group>
+                    )}
+                  </Paper>
                 ))}
                 {payments.length === 0 && (
                   <Text fz="sm" c="dimmed">
@@ -966,7 +1032,7 @@ function OrderDetail() {
             </Stack>
           </Paper>
 
-          <Paper p="sm" withBorder radius="md" bg="var(--sp-card-muted, #f8fafc)">
+          <Paper p="sm" withBorder radius="md" style={{ background: 'var(--sp-card-subtle)', borderColor: 'var(--sp-border)' }}>
             <Stack gap="xs">
               <Text fz="xs" fw={700}>
                 Recommended resolution:

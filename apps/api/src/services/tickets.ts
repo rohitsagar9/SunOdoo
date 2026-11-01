@@ -26,12 +26,22 @@ export async function createTicket(input: CreateTicketInput) {
 
   if (!customer) throw notFound('Customer');
 
-  const unit = input.serialNumber
+  let unit = input.serialNumber
     ? await prisma.inventoryUnit.findUnique({
         where: { serialNumber: input.serialNumber },
         include: { product: true, order: true },
       })
     : null;
+
+  if (!unit && customer.id) {
+    unit = await prisma.inventoryUnit.findFirst({
+      where: {
+        order: { customerId: customer.id, status: { in: ['INSTALLED', 'COMPLETED'] } },
+      },
+      include: { product: true, order: true },
+      orderBy: { warrantyEnd: 'desc' },
+    });
+  }
 
   const status = warrantyStatus(unit?.warrantyEnd);
   const ticketNumber = await nextTicketNumber();
@@ -42,7 +52,7 @@ export async function createTicket(input: CreateTicketInput) {
       customerId: customer.id,
       orderId: unit?.orderId ?? undefined,
       productId: input.productId ?? unit?.productId,
-      serialNumber: input.serialNumber,
+      serialNumber: input.serialNumber || unit?.serialNumber,
       issue: input.issue,
       faultCode: input.faultCode,
       priority: input.priority ?? 'MEDIUM',

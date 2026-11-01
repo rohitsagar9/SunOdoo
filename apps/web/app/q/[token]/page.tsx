@@ -36,9 +36,11 @@ import {
   Mail,
   MapPin,
   Phone,
+  Plus,
   ShieldCheck,
   Smartphone,
   Sun,
+  Trash2,
   UploadCloud,
   Wallet,
 } from 'lucide-react';
@@ -101,16 +103,23 @@ interface PublicQuote {
 
 const methods = ['UPI', 'BANK_TRANSFER', 'CARD', 'CASH', 'CHEQUE'];
 
+interface TrancheItem {
+  id: string;
+  file: File | null;
+  amount: number | string;
+  method: string;
+  reference: string;
+  notes: string;
+}
+
 export default function PublicQuotePage() {
   const params = useParams<{ token: string }>();
   const token = params?.token;
   const queryClient = useQueryClient();
 
-  const [method, setMethod] = useState<string>('UPI');
-  const [amount, setAmount] = useState<number | string>('');
-  const [reference, setReference] = useState('');
-  const [notes, setNotes] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [tranches, setTranches] = useState<TrancheItem[]>([
+    { id: '1', file: null, amount: '', method: 'UPI', reference: '', notes: '' },
+  ]);
 
   const query = useQuery({
     queryKey: ['public-quote', token],
@@ -138,6 +147,10 @@ export default function PublicQuotePage() {
   const balance = order ? Math.max(order.total - approvedPaid, 0) : (quote?.total ?? 0);
   const accepted = Boolean(order);
 
+  const totalTrancheSum = useMemo(() => {
+    return tranches.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  }, [tranches]);
+
   const acceptMutation = useMutation({
     mutationFn: async () => (await api.post(`/public/quotes/${token}/accept`)).data,
     onSuccess: () => {
@@ -152,39 +165,42 @@ export default function PublicQuotePage() {
       notifications.show({ title: 'Could not accept the quote', message: apiError(error), color: 'red' }),
   });
 
-  const paymentMutation = useMutation({
+  const multiPaymentMutation = useMutation({
     mutationFn: async () => {
-      if (!file) throw new Error('Attach the payment screenshot');
-      const body = new FormData();
-      body.append('amount', String(Number(amount)));
-      body.append('method', method);
-      body.append('reference', reference.trim());
-      body.append('notes', notes.trim());
-      body.append('payment', file);
-      return (await api.post(`/public/quotes/${token}/payments`, body)).data as {
-        message: string;
-      };
+      const valid = tranches.filter((t) => t.file && Number(t.amount) > 0);
+      if (valid.length === 0) {
+        throw new Error('Please attach at least one payment PDF/screenshot and enter the amount.');
+      }
+      const results = [];
+      for (const item of valid) {
+        const body = new FormData();
+        body.append('amount', String(Number(item.amount)));
+        body.append('method', item.method);
+        body.append('reference', item.reference.trim());
+        body.append('notes', item.notes.trim() || 'Split transaction tranche');
+        body.append('payment', item.file!);
+        const res = await api.post(`/public/quotes/${token}/payments`, body);
+        results.push(res.data);
+      }
+      return results;
     },
-    onSuccess: (result) => {
+    onSuccess: (results) => {
       queryClient.invalidateQueries({ queryKey: ['public-quote', token] });
-      setAmount('');
-      setReference('');
-      setNotes('');
-      setFile(null);
+      setTranches([{ id: String(Date.now()), file: null, amount: '', method: 'UPI', reference: '', notes: '' }]);
       notifications.show({
-        title: 'Payment submitted',
-        message: result.message,
+        title: 'Payments submitted successfully',
+        message: `${results.length} transaction receipt(s) submitted for total ${formatINR(totalTrancheSum)}. Our accounts desk will verify them shortly.`,
         color: 'teal',
-        autoClose: 7000,
+        autoClose: 8000,
       });
     },
     onError: (error) =>
-      notifications.show({ title: 'Could not submit payment', message: apiError(error), color: 'red' }),
+      notifications.show({ title: 'Could not submit payment(s)', message: apiError(error), color: 'red' }),
   });
 
   if (query.isLoading) {
     return (
-      <Box mih="100vh" style={{ display: 'grid', placeItems: 'center', background: '#f4f7fa' }}>
+      <Box mih="100vh" style={{ display: 'grid', placeItems: 'center', background: 'var(--sp-bg)' }}>
         <Stack align="center" gap="sm">
           <Loader color="sun" />
           <Text fz="sm" c="dimmed">
@@ -464,19 +480,43 @@ export default function PublicQuotePage() {
                         : 'Our team will call you to schedule the site survey.'}
                     </Text>
                     <SimpleGrid cols={2} spacing="xs">
-                      <Box p="sm" style={{ background: '#f8fafc', borderRadius: 10 }}>
-                        <Text fz={10} c="dimmed" fw={700} tt="uppercase">
+                      <Box
+                        p="sm"
+                        style={{
+                          background: 'var(--sp-card-subtle)',
+                          border: '1px solid var(--sp-border)',
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.08em' }}>
                           Approved
                         </Text>
-                        <Text fz="sm" fw={700} className="sp-mono">
+                        <Text
+                          fz="sm"
+                          fw={700}
+                          className="sp-mono"
+                          c={approvedPaid > 0 ? 'teal.7' : 'var(--sp-headings)'}
+                        >
                           {formatINR(approvedPaid)}
                         </Text>
                       </Box>
-                      <Box p="sm" style={{ background: '#fff8e6', borderRadius: 10 }}>
-                        <Text fz={10} c="dimmed" fw={700} tt="uppercase">
+                      <Box
+                        p="sm"
+                        style={{
+                          background: 'var(--sp-card-subtle)',
+                          border: '1px solid var(--sp-border)',
+                          borderRadius: 10,
+                        }}
+                      >
+                        <Text fz={10} c="dimmed" fw={700} tt="uppercase" style={{ letterSpacing: '0.08em' }}>
                           Balance
                         </Text>
-                        <Text fz="sm" fw={700} className="sp-mono">
+                        <Text
+                          fz="sm"
+                          fw={700}
+                          className="sp-mono"
+                          c={balance > 0 ? 'orange.7' : 'teal.7'}
+                        >
                           {formatINR(balance)}
                         </Text>
                       </Box>
@@ -498,98 +538,215 @@ export default function PublicQuotePage() {
                 <>
                   <PaymentQR amount={Math.max(balance - pendingTotal, 0) > 0 ? Math.max(balance - pendingTotal, 0) : balance} />
                   <Paper p="lg" radius="lg" className="sp-soft-card">
-                    <Stack gap="sm">
-                      <Group gap={6}>
-                        <UploadCloud size={16} color="#0f766e" />
-                        <Text fw={700} fz="sm">
-                          Upload payment screenshot
-                        </Text>
-                      </Group>
-                      {pendingTotal > 0 && (
-                        <Alert color="blue" variant="light" radius="md" p="xs">
-                          <Text fz="xs" fw={600}>
-                            Request already sent for {formatINR(pendingTotal)}. If you made an additional tranche, enter the amount below.
+                    <Stack gap="md">
+                      <Group justify="space-between" align="center">
+                        <Group gap={6}>
+                          <UploadCloud size={18} color="#0f766e" />
+                          <Text fw={700} fz="sm">
+                            Multi-Receipt & Split Payment Upload
                           </Text>
-                        </Alert>
-                      )}
+                        </Group>
+                        <Badge size="sm" variant="light" color="indigo">
+                          {tranches.length} {tranches.length === 1 ? 'Receipt' : 'Receipts'}
+                        </Badge>
+                      </Group>
+
                       <Text fz="xs" c="dimmed">
-                        {method === 'UPI'
-                          ? 'Indian banking rules limit UPI to max ₹1,00,000 per transaction. Pay up to ₹1,00,000 per scan or use Bank Transfer (NEFT/RTGS) for full amounts.'
-                          : 'Transfer to our bank account below, then upload the UTR/counterfoil screenshot.'}
+                        Split your payment across multiple transactions (e.g. 2 x UPI scans or split bank transfers). Upload the PDF receipt or screenshot for each tranche.
                       </Text>
 
-                      {method === 'BANK_TRANSFER' && (
-                        <Paper p="sm" radius="md" withBorder bg="var(--sp-card-bg, #f8f9fa)">
-                          <Text fz="xs" fw={700} mb={4}>Bank Transfer (NEFT / RTGS / IMPS) Details:</Text>
-                          <SimpleGrid cols={2} spacing="xs">
-                            <div>
-                              <Text fz={10} c="dimmed">Account Name</Text>
-                              <Text fz="xs" fw={600}>SunPower Solutions Pvt Ltd</Text>
-                            </div>
-                            <div>
-                              <Text fz={10} c="dimmed">Bank</Text>
-                              <Text fz="xs" fw={600}>HDFC Bank</Text>
-                            </div>
-                            <div>
-                              <Text fz={10} c="dimmed">Account Number</Text>
-                              <Text fz="xs" fw={700} className="sp-mono">50200088991122</Text>
-                            </div>
-                            <div>
-                              <Text fz={10} c="dimmed">IFSC Code</Text>
-                              <Text fz="xs" fw={700} className="sp-mono">HDFC0000123</Text>
-                            </div>
-                          </SimpleGrid>
-                        </Paper>
-                      )}
+                      <Paper
+                        p="sm"
+                        radius="md"
+                        withBorder
+                        style={{
+                          backgroundColor: 'var(--sp-card-subtle)',
+                          borderColor: 'var(--sp-border)',
+                          color: 'var(--sp-headings)',
+                        }}
+                      >
+                        <Text fz="xs" fw={700} mb={6} c="var(--sp-headings)">
+                          Bank Transfer (NEFT / RTGS / IMPS) Details:
+                        </Text>
+                        <SimpleGrid cols={2} spacing="xs">
+                          <div>
+                            <Text fz={10} c="var(--sp-secondary)">Account Name</Text>
+                            <Text fz="xs" fw={600} c="var(--sp-headings)">SunPower Solutions Pvt Ltd</Text>
+                          </div>
+                          <div>
+                            <Text fz={10} c="var(--sp-secondary)">Bank</Text>
+                            <Text fz="xs" fw={600} c="var(--sp-headings)">HDFC Bank</Text>
+                          </div>
+                          <div>
+                            <Text fz={10} c="var(--sp-secondary)">Account Number</Text>
+                            <Text fz="xs" fw={700} className="sp-mono" c="var(--sp-headings)">50200088991122</Text>
+                          </div>
+                          <div>
+                            <Text fz={10} c="var(--sp-secondary)">IFSC Code</Text>
+                            <Text fz="xs" fw={700} className="sp-mono" c="var(--sp-headings)">HDFC0000123</Text>
+                          </div>
+                        </SimpleGrid>
+                      </Paper>
 
-                      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                        <NumberInput
-                          label="Amount paid (₹)"
-                          min={1}
-                          max={method === 'UPI' ? 100000 : (balance || undefined)}
-                          thousandSeparator=","
-                          description={method === 'UPI' ? 'Max ₹1,00,000 (Bank UPI limit)' : undefined}
-                          placeholder={String(method === 'UPI' ? Math.min(balance, 100000) : balance || '')}
-                          value={amount}
-                          onChange={setAmount}
-                        />
-                        <Select
-                          label="Method"
-                          data={methods.map((value) => ({ value, label: titleCase(value) }))}
-                          value={method}
-                          onChange={(value) => setMethod(value ?? 'UPI')}
-                          allowDeselect={false}
-                        />
-                      </SimpleGrid>
-                      <TextInput
-                        label={method === 'UPI' ? 'UPI UTR / Reference' : 'Bank UTR / Transaction reference'}
-                        placeholder="e.g. 429182948192"
-                        value={reference}
-                        onChange={(event) => setReference(safeValue(event))}
-                      />
-                      <FileInput
-                        label="Payment proof / screenshot"
-                        placeholder="PNG, JPG or PDF"
-                        accept="image/png,image/jpeg,image/webp,application/pdf"
-                        value={file}
-                        onChange={setFile}
-                        leftSection={<UploadCloud size={15} />}
-                      />
-                      <Textarea
-                        label="Notes (optional)"
-                        placeholder="Paid from …"
-                        minRows={2}
-                        value={notes}
-                        onChange={(event) => setNotes(safeValue(event))}
-                      />
+                      {/* Tranche forms list */}
+                      <Stack gap="sm">
+                        {tranches.map((item, index) => (
+                          <Paper
+                            key={item.id}
+                            p="sm"
+                            withBorder
+                            radius="md"
+                            style={{ background: 'var(--sp-card)' }}
+                          >
+                            <Group justify="space-between" mb="xs">
+                              <Text fz="xs" fw={700} c="sun.7">
+                                Transaction #{index + 1}
+                              </Text>
+                              {tranches.length > 1 && (
+                                <Button
+                                  size="compact-xs"
+                                  variant="subtle"
+                                  color="red"
+                                  leftSection={<Trash2 size={12} />}
+                                  onClick={() =>
+                                    setTranches((current) => current.filter((t) => t.id !== item.id))
+                                  }
+                                >
+                                  Remove
+                                </Button>
+                              )}
+                            </Group>
+
+                            <Stack gap="xs">
+                              <FileInput
+                                label="Receipt PDF / Screenshot"
+                                placeholder="Choose PDF or image proof"
+                                accept="application/pdf,image/png,image/jpeg,image/webp"
+                                value={item.file}
+                                onChange={(f) =>
+                                  setTranches((current) =>
+                                    current.map((t) => (t.id === item.id ? { ...t, file: f } : t)),
+                                  )
+                                }
+                                leftSection={<UploadCloud size={14} />}
+                                required
+                              />
+
+                              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+                                <NumberInput
+                                  label="Amount in this receipt (₹)"
+                                  min={1}
+                                  placeholder="e.g. 50000"
+                                  thousandSeparator=","
+                                  value={item.amount}
+                                  onChange={(v) =>
+                                    setTranches((current) =>
+                                      current.map((t) => (t.id === item.id ? { ...t, amount: v } : t)),
+                                    )
+                                  }
+                                  required
+                                />
+                                <Select
+                                  label="Method"
+                                  data={methods.map((value) => ({ value, label: titleCase(value) }))}
+                                  value={item.method}
+                                  onChange={(v) =>
+                                    setTranches((current) =>
+                                      current.map((t) => (t.id === item.id ? { ...t, method: v ?? 'UPI' } : t)),
+                                    )
+                                  }
+                                  allowDeselect={false}
+                                />
+                              </SimpleGrid>
+
+                              <TextInput
+                                label="UTR / Reference Number"
+                                placeholder="e.g. UPI Ref / NEFT UTR / Cheque No."
+                                value={item.reference}
+                                onChange={(e) =>
+                                  setTranches((current) =>
+                                    current.map((t) =>
+                                      t.id === item.id ? { ...t, reference: safeValue(e) } : t,
+                                    ),
+                                  )
+                                }
+                              />
+                            </Stack>
+                          </Paper>
+                        ))}
+                      </Stack>
+
+                      <Button
+                        variant="light"
+                        color="indigo"
+                        size="xs"
+                        leftSection={<Plus size={14} />}
+                        onClick={() =>
+                          setTranches((current) => [
+                            ...current,
+                            {
+                              id: String(Date.now()),
+                              file: null,
+                              amount: '',
+                              method: 'UPI',
+                              reference: '',
+                              notes: '',
+                            },
+                          ])
+                        }
+                      >
+                        + Add Another Transaction / Receipt PDF
+                      </Button>
+
+                      {/* Dynamic Live Sum & Comparison */}
+                      <Paper p="sm" radius="md" withBorder bg="rgba(245, 158, 11, 0.05)">
+                        <Group justify="space-between" mb={4}>
+                          <Text fz="xs" fw={700}>
+                            Total Sum of {tranches.length} Attached Receipts:
+                          </Text>
+                          <Text fz="md" fw={800} className="sp-mono" c="sun.7">
+                            {formatINR(totalTrancheSum)}
+                          </Text>
+                        </Group>
+
+                        {totalTrancheSum > 0 && (
+                          <Group gap="xs" mt={4} wrap="wrap">
+                            {totalTrancheSum === quote.advanceAmount && (
+                              <Badge color="teal" variant="light" size="sm">
+                                ✅ Exact Match for 30% Advance Due ({formatINR(quote.advanceAmount)})
+                              </Badge>
+                            )}
+                            {totalTrancheSum === balance && (
+                              <Badge color="teal" variant="light" size="sm">
+                                ✅ Exact Match for 100% Full Payment ({formatINR(balance)})
+                              </Badge>
+                            )}
+                            {totalTrancheSum > quote.advanceAmount && totalTrancheSum < balance && (
+                              <Badge color="cyan" variant="light" size="sm">
+                                ✅ Covers Advance + Partial Balance ({formatINR(totalTrancheSum)})
+                              </Badge>
+                            )}
+                            {totalTrancheSum < quote.advanceAmount && (
+                              <Badge color="orange" variant="light" size="sm">
+                                ⚠️ ₹{formatINR(quote.advanceAmount - totalTrancheSum)} remaining to cover 30% advance
+                              </Badge>
+                            )}
+                          </Group>
+                        )}
+                      </Paper>
+
                       <Button
                         color="sun"
+                        size="md"
                         leftSection={<Wallet size={15} />}
-                        disabled={!file || Number(amount) <= 0 || (method === 'UPI' && Number(amount) > 100000)}
-                        loading={paymentMutation.isPending}
-                        onClick={() => paymentMutation.mutate()}
+                        disabled={
+                          totalTrancheSum <= 0 ||
+                          tranches.every((t) => !t.file)
+                        }
+                        loading={multiPaymentMutation.isPending}
+                        onClick={() => multiPaymentMutation.mutate()}
                       >
-                        Submit payment proof
+                        Submit All {tranches.length} Payment Receipts ({formatINR(totalTrancheSum)})
                       </Button>
                     </Stack>
                   </Paper>

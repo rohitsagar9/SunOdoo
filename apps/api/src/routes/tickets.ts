@@ -4,6 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { createTicket, updateTicket } from '../services/tickets.js';
 import { warrantyStatus } from '../services/warranty.js';
+import { nextJobNumber } from '../lib/sequence.js';
 import { audit } from '../lib/audit.js';
 
 const ticketListInclude = {
@@ -17,11 +18,12 @@ const ticketListInclude = {
 const ticketDetailInclude = {
   customer: true,
   product: true,
-  assignedTo: { select: { id: true, name: true } },
+  assignedTo: { select: { id: true, name: true, role: true, phone: true } },
   order: { include: { quote: true, job: true } },
   updates: { include: { author: { select: { id: true, name: true, role: true } } }, orderBy: { createdAt: 'asc' as const } },
   invoices: true,
   payments: true,
+  jobs: { include: { technician: true, signature: true, photos: true }, orderBy: { createdAt: 'desc' as const } },
 } as const;
 
 export const ticketRoutes: FastifyPluginAsync = async (app) => {
@@ -147,6 +149,91 @@ export const ticketRoutes: FastifyPluginAsync = async (app) => {
 
       await audit(request.user.sub, 'TICKET_NOTE_ADDED', 'Ticket', id);
       return reply.code(201).send(update);
+    },
+  );
+
+  app.post(
+    '/tickets/:id/approve-repair',
+    { preHandler: [app.authenticate, app.authorize('SUPPORT', 'DIRECTOR', 'SALES')] },
+    async (request) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const body = z
+        .object({
+          technicianId: z.string().optional(),
+          scheduledDate: z.string().optional(),
+          scheduledSlot: z.string().optional(),
+          notes: z.string().optional(),
+        })
+        .parse(request.body ?? {});
+
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+        include: { customer: true },
+      });
+      if (!ticket) throw notFound('Ticket');
+
+      const isWarranty = ticket.warrantyStatus === 'IN_WARRANTY';
+      const now = new Date();
+
+      const defaultTech = await prisma.user.findFirst({
+        where: { role: 'TECHNICIAN', active: true },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const targetTechId = body.technicianId || ticket.assignedToId || defaultTech?.id;
+      const schedDate = body.scheduledDate ? new Date(body.scheduledDate) : now;
+
+      const updated = await prisma.$transaction(async (tx) => {
+        const updatedTicket = await tx.ticket.update({
+          where: { id },
+          data: {
+            billable: !isWarranty,
+            approvedAt: now,
+            approvedBy: request.user.sub,
+            assignedToId: targetTechId,
+            status: 'IN_PROGRESS',
+            laborCharge: isWarranty ? 0 : ticket.laborCharge,
+            partsCharge: isWarranty ? 0 : ticket.partsCharge,
+            totalCharge: isWarranty ? 0 : ticket.totalCharge,
+          },
+          include: ticketDetailInclude,
+        });
+
+        const repairJob = await tx.job.create({
+          data: {
+            jobNumber: await nextJobNumber(),
+            ticketId: ticket.id,
+            customerId: ticket.customerId,
+            type: 'REPAIR',
+            technicianId: targetTechId,
+            scheduledDate: schedDate,
+            scheduledSlot: body.scheduledSlot || '10:00 - 13:00',
+            notes: `Approved ${ticket.inspectionOutcome || 'REPAIR'} for ${ticket.customer.name} (Ticket ${ticket.ticketNumber}). ${
+              isWarranty ? '✓ UNDER WARRANTY (100% Free Coverage)' : `BILLABLE: ₹${ticket.totalCharge}`
+            }. Notes: ${body.notes || ticket.inspectionNotes || ticket.issue}`,
+          },
+        });
+
+        await tx.ticketUpdate.create({
+          data: {
+            ticketId: ticket.id,
+            authorId: request.user.sub,
+            message: `Support verified warranty: ${
+              isWarranty ? 'IN WARRANTY (Auto-approved 100% free repair)' : `OUT OF WARRANTY (Approved billable ₹${ticket.totalCharge})`
+            }. Scheduled Repair Job #${repairJob.jobNumber} for technician.`,
+            statusTo: 'IN_PROGRESS',
+          },
+        });
+
+        return { ticket: updatedTicket, job: repairJob };
+      });
+
+      await audit(request.user.sub, 'TICKET_REPAIR_APPROVED', 'Ticket', id, {
+        isWarranty,
+        jobId: updated.job.id,
+      });
+
+      return updated;
     },
   );
 

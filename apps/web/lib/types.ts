@@ -34,6 +34,8 @@ export interface Survey {
   cableDistanceM?: number | null;
   shadowFreeAreaSqft?: number | null;
   approved: boolean;
+  technicianAssessment?: 'FEASIBLE' | 'NOT_FEASIBLE' | string | null;
+  overrideReason?: string | null;
   findings?: string | null;
   technician?: { id: string; name: string } | null;
 }
@@ -85,6 +87,8 @@ export interface Payment {
   screenshotUrl?: string | null;
   reference?: string | null;
   notes?: string | null;
+  credibilityConfirmed?: boolean | null;
+  cashDepositVerified?: boolean | null;
   createdAt: string;
   approvedAt?: string | null;
   submittedBy?: { id: string; name: string } | null;
@@ -101,6 +105,7 @@ export interface Quote {
   systemType: 'ON_GRID' | 'OFF_GRID';
   capacityKw: number;
   subtotal: number;
+  discountPercent?: number | null;
   discount: number;
   taxRate: number;
   taxAmount: number;
@@ -162,6 +167,7 @@ export interface Job {
   jobNumber: string;
   orderId?: string | null;
   leadId?: string | null;
+  ticketId?: string | null;
   customerId: string;
   type: 'SURVEY' | 'INSTALLATION' | 'REPAIR' | 'MAINTENANCE';
   status: string;
@@ -179,6 +185,7 @@ export interface Job {
   customer: Customer;
   technician?: { id: string; name: string; phone?: string | null } | null;
   order?: Order | null;
+  ticket?: Ticket | null;
   lead?: {
     id: string;
     reference?: string;
@@ -186,6 +193,12 @@ export interface Job {
     requestedKw?: number;
     systemType?: string;
     survey?: Survey | null;
+    orders?: Array<{
+      id: string;
+      orderNumber: string;
+      status: string;
+      job?: { id: string; jobNumber: string; status: string; type: string } | null;
+    }>;
   } | null;
   photos?: JobPhoto[];
   signature?: JobSignature | null;
@@ -292,6 +305,12 @@ export interface Ticket {
   totalCharge: number;
   assignedToId?: string | null;
   resolution?: string | null;
+  inspectionOutcome?: 'REPAIR' | 'REPLACEMENT' | null;
+  repairBudget?: number | null;
+  replacementPart?: string | null;
+  inspectionNotes?: string | null;
+  approvedAt?: string | null;
+  approvedBy?: string | null;
   createdAt: string;
   resolvedAt?: string | null;
   closedAt?: string | null;
@@ -304,6 +323,7 @@ export interface Ticket {
   updates?: TicketUpdate[];
   invoices?: Invoice[];
   payments?: Payment[];
+  jobs?: Job[];
   _count?: { updates: number };
 }
 
@@ -413,6 +433,7 @@ export interface SupportHandoverItem {
   systemSizeKw: number;
   systemType: string;
   total: number;
+  balanceDue?: number;
   installedAt?: string | null;
   completedAt?: string | null;
   status: 'PENDING' | 'MAINTENANCE';

@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { AppError, notFound } from '../lib/errors.js';
-import { nextLeadReference } from '../lib/sequence.js';
+import { nextJobNumber, nextLeadReference } from '../lib/sequence.js';
 import { acceptQuote } from '../services/quotes.js';
 import { parseForm } from '../lib/multipart.js';
 import { createTicket } from '../services/tickets.js';
@@ -23,10 +23,14 @@ const inquirySchema = z.object({
 });
 
 const publicTicketSchema = z.object({
+  name: z.string().min(2).max(100).optional(),
   phone: z.string().min(10).max(15),
+  email: z.string().email().optional().or(z.literal('')),
   serialNumber: z.string().min(4).max(60).optional(),
-  issue: z.string().min(10).max(2000),
+  category: z.string().max(80).optional(),
+  issue: z.string().min(5).max(2000),
   faultCode: z.string().max(60).optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
 });
 
 export const publicRoutes: FastifyPluginAsync = async (app) => {
@@ -185,22 +189,69 @@ export const publicRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/tickets', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const body = publicTicketSchema.parse(request.body);
+    const phone = body.phone.replace(/\s+/g, '');
+
+    // Upsert or fetch customer so any website visitor can raise an issue without login
+    let customer = await prisma.customer.findUnique({ where: { phone } });
+    if (!customer) {
+      customer = await prisma.customer.create({
+        data: {
+          name: body.name?.trim() || 'Website Customer',
+          phone,
+          email: body.email?.trim() || undefined,
+          address: 'Reported via website issue form',
+        },
+      });
+    } else if (body.name && (!customer.name || customer.name === 'Website Customer')) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: { name: body.name.trim() },
+      });
+    }
+
+    const description = body.category && !body.issue.toLowerCase().includes(body.category.toLowerCase())
+      ? `[Category: ${body.category}] ${body.issue}`
+      : body.issue;
+
+    const tech = await prisma.user.findFirst({
+      where: { role: 'TECHNICIAN', active: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
     const ticket = await createTicket({
-      phone: body.phone.replace(/\s+/g, ''),
-      serialNumber: body.serialNumber,
-      issue: body.issue,
-      faultCode: body.faultCode,
-      priority: 'HIGH',
+      customerId: customer.id,
+      phone,
+      serialNumber: body.serialNumber?.trim() || undefined,
+      issue: description,
+      faultCode: body.faultCode?.trim() || undefined,
+      priority: body.priority || 'HIGH',
+      assignedToId: tech?.id,
+    });
+
+    // Schedule on-site technician inspection job for today
+    const inspectionJob = await prisma.job.create({
+      data: {
+        jobNumber: await nextJobNumber(),
+        ticketId: ticket.id,
+        customerId: customer.id,
+        type: 'REPAIR',
+        technicianId: tech?.id,
+        scheduledDate: new Date(),
+        scheduledSlot: '09:00 - 12:00',
+        notes: `Initial on-site solar equipment inspection for Ticket ${ticket.ticketNumber}: ${description}. Inspect equipment, diagnose fault, and recommend Repair (with budget) or Replacement.`,
+      },
     });
 
     return reply.code(201).send({
       ticketNumber: ticket.ticketNumber,
       status: ticket.status,
       warrantyStatus: ticket.warrantyStatus,
+      customerName: customer.name,
+      inspectionJobNumber: inspectionJob.jobNumber,
       message:
         ticket.warrantyStatus === 'IN_WARRANTY'
-          ? 'Good news: this unit is under warranty. Support will contact you shortly.'
-          : 'Your ticket is registered. Support will confirm any applicable charges.',
+          ? 'Good news: this unit is under active warranty. On-site inspection job scheduled for today.'
+          : 'Your service ticket is registered. An on-site inspection job is scheduled for our solar technician today.',
     });
   });
 

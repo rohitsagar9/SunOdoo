@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,6 +13,7 @@ import {
   Modal,
   Progress,
   ScrollArea,
+  SegmentedControl,
   Select,
   SimpleGrid,
   Stack,
@@ -75,6 +76,7 @@ function SupportDesk() {
   const [newOpen, setNewOpen] = useState(false);
   const [handoverModalOpen, setHandoverModalOpen] = useState(false);
   const [selectedHandover, setSelectedHandover] = useState<SupportHandoverItem | null>(null);
+  const [handoverFilter, setHandoverFilter] = useState<'PENDING' | 'ALL'>('PENDING');
   const [ticketForm, setTicketForm] = useState({
     phone: '',
     serialNumber: '',
@@ -88,6 +90,14 @@ function SupportDesk() {
     enabled: isSupportDesk,
     queryFn: async () => (await api.get<DashboardSupport>('/dashboard/support')).data,
   });
+
+  const filteredHandoverQueue = useMemo(() => {
+    const queue = dashboardQuery.data?.handoverQueue ?? [];
+    if (handoverFilter === 'PENDING') {
+      return queue.filter((item) => item.status === 'PENDING');
+    }
+    return queue;
+  }, [dashboardQuery.data?.handoverQueue, handoverFilter]);
 
   const ticketsQuery = useQuery({
     queryKey: ['tickets'],
@@ -477,126 +487,142 @@ function SupportDesk() {
 
             {isSupportDesk && dashboard?.handoverQueue && dashboard.handoverQueue.length > 0 && (
               <Panel
-                title="Completed installations & AMC handover"
-                subtitle="Fully paid and installed solar plants — send customer congrats and activate maintenance"
+                title="AMC & Support Handover"
                 action={
-                  <Badge color={dashboard.kpis.pendingHandover ? 'orange' : 'teal'} variant="light">
-                    {dashboard.kpis.pendingHandover ?? 0} pending handover
-                  </Badge>
+                  <SegmentedControl
+                    size="xs"
+                    value={handoverFilter}
+                    onChange={(v) => setHandoverFilter(v as 'PENDING' | 'ALL')}
+                    data={[
+                      { label: `Pending Handover (${dashboard.kpis.pendingHandover ?? 0})`, value: 'PENDING' },
+                      { label: `All Completed (${dashboard.handoverQueue.length})`, value: 'ALL' },
+                    ]}
+                    color="sun"
+                  />
                 }
                 padding={0}
               >
                 <ScrollArea>
                   <Table highlightOnHover verticalSpacing="sm" horizontalSpacing="md" miw={750}>
-                    <Table.Thead>
+                    <Table.Thead style={{ background: 'var(--sp-card-subtle)', borderBottom: '1px solid var(--sp-border)' }}>
                       <Table.Tr>
-                        <Table.Th>Customer & Order</Table.Th>
-                        <Table.Th>System Specs</Table.Th>
-                        <Table.Th>Installation</Table.Th>
-                        <Table.Th>Handover Status</Table.Th>
-                        <Table.Th ta="right">Action</Table.Th>
+                        <Table.Th style={{ width: '32%' }}>Customer & Order</Table.Th>
+                        <Table.Th style={{ width: '22%' }}>System Specs</Table.Th>
+                        <Table.Th style={{ width: '16%' }}>Installation</Table.Th>
+                        <Table.Th style={{ width: '15%' }}>Handover Status</Table.Th>
+                        <Table.Th style={{ width: '15%' }}>Action</Table.Th>
                       </Table.Tr>
                     </Table.Thead>
                     <Table.Tbody>
-                      {dashboard.handoverQueue.map((item) => (
-                        <Table.Tr key={item.id}>
-                          <Table.Td>
-                            <Text fz="sm" fw={700} style={{ color: 'var(--sp-headings)' }}>
-                              {item.customerName}
+                      {filteredHandoverQueue.length === 0 ? (
+                        <Table.Tr>
+                          <Table.Td colSpan={5} style={{ textAlign: 'center', padding: '24px 16px' }}>
+                            <Text fz="sm" c="dimmed">
+                              ✓ All completed installations have been handed over. No pending handovers at this moment.
                             </Text>
-                            <Text fz={10} c="dimmed" className="sp-mono">
-                              {item.orderNumber} · {item.customerPhone}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text fz="xs" fw={600}>
-                              {item.systemSizeKw} kW {titleCase(item.systemType)}
-                            </Text>
-                            <Text fz={10} c="teal" fw={600}>
-                              {formatINR(item.total)} · 100% Paid
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            <Text fz="xs">
-                              {formatDate(item.installedAt || item.completedAt)}
-                            </Text>
-                            <Text fz={10} c="dimmed">
-                              Tech: {item.technicianName}
-                            </Text>
-                          </Table.Td>
-                          <Table.Td>
-                            {item.status === 'MAINTENANCE' ? (
-                              <div>
-                                <Badge color="teal" variant="light" size="sm">
-                                  MAINTENANCE ACTIVE
-                                </Badge>
-                                <Text fz={10} c="dimmed" mt={2}>
-                                  Card {item.cardCode} sent
-                                </Text>
-                              </div>
-                            ) : (
-                              <div>
-                                <Badge color="orange" variant="light" size="sm">
-                                  PENDING
-                                </Badge>
-                                <Text fz={10} c="dimmed" mt={2}>
-                                  Awaiting support card
-                                </Text>
-                              </div>
-                            )}
-                          </Table.Td>
-                          <Table.Td ta="right">
-                            <Group justify="flex-end" gap={6}>
-                              <Button
-                                size="compact-xs"
-                                variant="subtle"
-                                color="orange"
-                                leftSection={<Wrench size={12} />}
-                                title="Raise repair / service ticket"
-                                onClick={() => {
-                                  const primarySerial = item.warrantyUnits?.[0]?.serialNumber || '';
-                                  setTicketForm({
-                                    phone: item.customerPhone,
-                                    serialNumber: primarySerial,
-                                    issue: `Post-installation service & repair for ${item.customerName} (${item.systemSizeKw} kW ${titleCase(item.systemType)} plant, Order ${item.orderNumber}): `,
-                                    faultCode: '',
-                                    priority: 'MEDIUM',
-                                  });
-                                  setNewOpen(true);
-                                }}
-                              >
-                                Service / Repair
-                              </Button>
-                              {item.status === 'PENDING' ? (
-                                <Button
-                                  size="compact-xs"
-                                  color="teal"
-                                  leftSection={<Send size={12} />}
-                                  onClick={() => {
-                                    setSelectedHandover(item);
-                                    setHandoverModalOpen(true);
-                                  }}
-                                >
-                                  Congrats & Card
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="compact-xs"
-                                  variant="light"
-                                  color="teal"
-                                  leftSection={<ShieldCheck size={12} />}
-                                  onClick={() => {
-                                    setSelectedHandover(item);
-                                    setHandoverModalOpen(true);
-                                  }}
-                                >
-                                  Support Card
-                                </Button>
-                              )}
-                            </Group>
                           </Table.Td>
                         </Table.Tr>
-                      ))}
+                      ) : (
+                        filteredHandoverQueue.map((item) => (
+                          <Table.Tr key={item.id} style={{ borderBottom: '1px solid var(--sp-border)' }}>
+                            <Table.Td>
+                              <Text fz="sm" fw={700} style={{ color: 'var(--sp-headings)' }}>
+                                {item.customerName}
+                              </Text>
+                              <Text fz={10} c="dimmed" className="sp-mono">
+                                {item.orderNumber} · {item.customerPhone}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text fz="xs" fw={600}>
+                                {item.systemSizeKw} kW {titleCase(item.systemType)}
+                              </Text>
+                              <Text fz={10} c={item.balanceDue && item.balanceDue > 0 ? 'orange.7' : 'teal.7'} fw={600}>
+                                {formatINR(item.total)} · {item.balanceDue && item.balanceDue > 0 ? `Advance Paid (Balance: ${formatINR(item.balanceDue)})` : '100% Paid'}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text fz="xs">
+                                {formatDate(item.installedAt || item.completedAt)}
+                              </Text>
+                              <Text fz={10} c="dimmed">
+                                Tech: {item.technicianName}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              {item.status === 'MAINTENANCE' ? (
+                                <div>
+                                  <Badge color="teal" variant="light" size="sm">
+                                    MAINTENANCE ACTIVE
+                                  </Badge>
+                                  <Text fz={10} c="dimmed" mt={2}>
+                                    Card {item.cardCode} sent
+                                  </Text>
+                                </div>
+                              ) : (
+                                <div>
+                                  <Badge color="orange" variant="light" size="sm">
+                                    PENDING
+                                  </Badge>
+                                  <Text fz={10} c="dimmed" mt={2}>
+                                    Awaiting support card
+                                  </Text>
+                                </div>
+                              )}
+                            </Table.Td>
+                            <Table.Td>
+                              <Group gap={6} wrap="nowrap" align="center">
+                                <Button
+                                  size="compact-xs"
+                                  variant="subtle"
+                                  color="orange"
+                                  leftSection={<Wrench size={12} />}
+                                  title="Raise repair / service ticket"
+                                  onClick={() => {
+                                    const primarySerial = item.warrantyUnits?.[0]?.serialNumber || '';
+                                    setTicketForm({
+                                      phone: item.customerPhone,
+                                      serialNumber: primarySerial,
+                                      issue: `Post-installation service & repair for ${item.customerName} (${item.systemSizeKw} kW ${titleCase(item.systemType)} plant, Order ${item.orderNumber}): `,
+                                      faultCode: '',
+                                      priority: 'MEDIUM',
+                                    });
+                                    setNewOpen(true);
+                                  }}
+                                >
+                                  Repair
+                                </Button>
+                                {item.status === 'PENDING' ? (
+                                  <Button
+                                    size="compact-xs"
+                                    color="teal"
+                                    leftSection={<Send size={12} />}
+                                    onClick={() => {
+                                      setSelectedHandover(item);
+                                      setHandoverModalOpen(true);
+                                    }}
+                                  >
+                                    Congrats & Card
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="compact-xs"
+                                    variant="light"
+                                    color="teal"
+                                    leftSection={<ShieldCheck size={12} />}
+                                    onClick={() => {
+                                      setSelectedHandover(item);
+                                      setHandoverModalOpen(true);
+                                    }}
+                                  >
+                                    Support Card
+                                  </Button>
+                                )}
+                              </Group>
+                            </Table.Td>
+                          </Table.Tr>
+                        ))
+                      )}
                     </Table.Tbody>
                   </Table>
                 </ScrollArea>
@@ -1170,6 +1196,14 @@ function SupportDesk() {
                   }}
                 >
                   Close
+                </Button>
+                <Button
+                  variant="light"
+                  color="indigo"
+                  leftSection={<Printer size={15} />}
+                  onClick={() => window.print()}
+                >
+                  Download / Print Congrats PDF
                 </Button>
                 {selectedHandover.status === 'PENDING' && (
                   <Button

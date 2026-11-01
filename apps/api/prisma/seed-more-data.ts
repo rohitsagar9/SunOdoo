@@ -34,7 +34,7 @@ async function run() {
   const warehouse = await prisma.user.findFirst({ where: { role: 'WAREHOUSE' } });
   const support = await prisma.user.findFirst({ where: { role: 'SUPPORT' } });
 
-  if (!sales || !director || !tech1) {
+  if (!sales || !director || !tech1 || !tech2 || !support) {
     throw new Error('Baseline users missing. Run primary db:seed first.');
   }
 

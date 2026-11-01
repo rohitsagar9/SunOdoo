@@ -1,7 +1,7 @@
 import type { SystemType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { AppError, notFound } from '../lib/errors.js';
-import { nextQuoteNumber, publicToken } from '../lib/sequence.js';
+import { nextOrderNumber, nextQuoteNumber, publicToken } from '../lib/sequence.js';
 import { priceBom } from './bom.js';
 import { audit } from '../lib/audit.js';
 
@@ -11,6 +11,7 @@ interface CreateQuoteInput {
   capacityKw?: number;
   systemType?: SystemType;
   discount?: number;
+  discountPercent?: number;
   notes?: string;
 }
 
@@ -27,7 +28,13 @@ export async function createQuoteForLead(input: CreateQuoteInput) {
 
   const capacityKw = input.capacityKw ?? lead.requestedKw;
   const systemType = input.systemType ?? lead.systemType;
-  const priced = await priceBom(capacityKw, systemType, input.discount ?? 0);
+  const priced = await priceBom(
+    capacityKw,
+    systemType,
+    input.discount ?? 0,
+    13.8,
+    input.discountPercent ?? 0,
+  );
   const quoteNumber = await nextQuoteNumber();
   const validUntil = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
@@ -41,6 +48,7 @@ export async function createQuoteForLead(input: CreateQuoteInput) {
         capacityKw,
         subtotal: priced.subtotal,
         discount: priced.discount,
+        discountPercent: priced.discountPercent ?? input.discountPercent ?? 0,
         taxRate: priced.taxRate,
         taxAmount: priced.taxAmount,
         total: priced.total,
@@ -68,6 +76,7 @@ export async function createQuoteForLead(input: CreateQuoteInput) {
   await audit(input.createdById, 'QUOTE_CREATED', 'Quote', quote.id, {
     quoteNumber: quote.quoteNumber,
     total: quote.total,
+    discountPercent: priced.discountPercent,
   });
 
   return quote;
@@ -90,9 +99,7 @@ export async function acceptQuote(token: string) {
   }
   if (quote.order) return { quote, order: quote.order, created: false };
 
-  const orderNumber = `SP-O-${new Date().getFullYear()}-${String(
-    (await prisma.order.count()) + 1,
-  ).padStart(4, '0')}`;
+  const orderNumber = await nextOrderNumber();
 
   const order = await prisma.$transaction(async (tx) => {
     await tx.quote.update({ where: { id: quote.id }, data: { status: 'ACCEPTED' } });

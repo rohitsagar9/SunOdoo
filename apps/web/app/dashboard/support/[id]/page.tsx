@@ -38,6 +38,7 @@ import {
   Phone,
   Plus,
   RefreshCw,
+  ShieldAlert,
   ShieldCheck,
   UserRound,
   Wallet,
@@ -148,6 +149,25 @@ function TicketDetail() {
     },
     onError: (error) =>
       notifications.show({ title: 'Could not post update', message: apiError(error), color: 'red' }),
+  });
+
+  const approveRepairMutation = useMutation({
+    mutationFn: async () =>
+      (
+        await api.post(`/tickets/${id}/approve-repair`, {
+          technicianId: ticket?.assignedToId || undefined,
+        })
+      ).data,
+    onSuccess: (data) => {
+      invalidate();
+      notifications.show({
+        title: ticket?.warrantyStatus === 'IN_WARRANTY' ? 'Warranty Auto-Approved' : 'Billable Repair Approved',
+        message: `Scheduled Repair Job #${data.job.jobNumber} for technician. Repair workflow is live.`,
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not approve repair', message: apiError(error), color: 'red' }),
   });
 
   const paymentMutation = useMutation({
@@ -327,6 +347,183 @@ function TicketDetail() {
                 </Button>
               )}
             </Panel>
+
+            {ticket.inspectionOutcome ? (
+              <Panel
+                title="Technician On-Site Inspection & Recommendation"
+                subtitle="Assessment submitted from the technician's mobile job card"
+                action={<Wrench size={16} color="#783cf6" />}
+              >
+                <Stack gap="md">
+                  <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+                    <InlineStat
+                      label="Recommended Action"
+                      value={ticket.inspectionOutcome === 'REPAIR' ? 'Option 1: REPAIR' : 'Option 2: REPLACEMENT'}
+                      color={ticket.inspectionOutcome === 'REPAIR' ? '#2563eb' : '#783cf6'}
+                    />
+                    <InlineStat
+                      label={ticket.inspectionOutcome === 'REPAIR' ? 'Estimated Repair Budget' : 'Replacement Component'}
+                      value={
+                        ticket.inspectionOutcome === 'REPAIR'
+                          ? formatINR(ticket.repairBudget ?? 0)
+                          : ticket.replacementPart ?? 'Hardware Unit'
+                      }
+                      color="#0f766e"
+                    />
+                    <InlineStat
+                      label="Warranty Assessment"
+                      value={ticket.warrantyStatus === 'IN_WARRANTY' ? '✓ In Warranty (100% Free)' : '⚠️ Out of Warranty (Billable)'}
+                      color={ticket.warrantyStatus === 'IN_WARRANTY' ? '#0f766e' : '#dc2626'}
+                    />
+                  </SimpleGrid>
+
+                  {ticket.inspectionNotes && (
+                    <Paper p="sm" withBorder style={{ background: 'var(--sp-card)', borderRadius: 8 }}>
+                      <Text fz={11} fw={700} tt="uppercase" c="dimmed" mb={2}>
+                        Technician Observation Notes
+                      </Text>
+                      <Text fz="xs" style={{ whiteSpace: 'pre-wrap' }}>
+                        {ticket.inspectionNotes}
+                      </Text>
+                    </Paper>
+                  )}
+
+                  {ticket.approvedAt ? (
+                    <Alert color="teal" variant="light" radius="md" icon={<CheckCircle2 size={16} />}>
+                      <Group justify="space-between" align="center" wrap="wrap">
+                        <div>
+                          <Text fz="xs" fw={700}>
+                            ✓ Approved by Support Desk on {formatDateTime(ticket.approvedAt)}
+                          </Text>
+                          <Text fz={11} c="dimmed">
+                            {ticket.warrantyStatus === 'IN_WARRANTY'
+                              ? 'Auto-approved at ₹0 cost under equipment warranty. Free repair scheduled.'
+                              : `Approved as customer-billable for ${formatINR(ticket.totalCharge)}. Repair scheduled.`}
+                          </Text>
+                        </div>
+                        {ticket.jobs && ticket.jobs.length > 0 && (
+                          <Button
+                            component={Link}
+                            href={`/dashboard/jobs/${ticket.jobs[0].id}`}
+                            size="xs"
+                            color="grape"
+                            rightSection={<ArrowRight size={13} />}
+                          >
+                            Open Scheduled Job ({ticket.jobs[0].jobNumber})
+                          </Button>
+                        )}
+                      </Group>
+                    </Alert>
+                  ) : (
+                    <Alert
+                      color={ticket.warrantyStatus === 'IN_WARRANTY' ? 'teal' : 'orange'}
+                      variant="light"
+                      radius="md"
+                      icon={ticket.warrantyStatus === 'IN_WARRANTY' ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
+                      title={
+                        ticket.warrantyStatus === 'IN_WARRANTY'
+                          ? '✓ System is Under Active Warranty — 100% Free Repair Eligible'
+                          : '⚠️ System Out of Warranty — Customer Charges Apply'
+                      }
+                    >
+                      <Stack gap="xs" mt={4}>
+                        <Text fz="xs">
+                          {ticket.warrantyStatus === 'IN_WARRANTY'
+                            ? `Warranty is valid until ${formatDate(ticket.warrantyEnd)}. Support will automatically approve ₹0 labor and components.`
+                            : `Estimated charge to customer: ${formatINR(ticket.repairBudget ?? 0)}. Approving will bill the customer upon job completion.`}
+                        </Text>
+                        {canEdit && (
+                          <Group justify="flex-start" mt="xs">
+                            <Button
+                              color={ticket.warrantyStatus === 'IN_WARRANTY' ? 'teal' : 'orange'}
+                              leftSection={<CheckCircle2 size={15} />}
+                              loading={approveRepairMutation.isPending}
+                              onClick={() => approveRepairMutation.mutate()}
+                            >
+                              {ticket.warrantyStatus === 'IN_WARRANTY'
+                                ? 'Auto-Approve 100% Free Warranty Repair & Dispatch Tech'
+                                : `Approve Billable Repair (${formatINR(ticket.repairBudget ?? 0)}) & Dispatch Tech`}
+                            </Button>
+                          </Group>
+                        )}
+                      </Stack>
+                    </Alert>
+                  )}
+                </Stack>
+              </Panel>
+            ) : null}
+
+            {ticket.jobs && ticket.jobs.length > 0 && (
+              <Panel
+                title="Technician Visits & Scheduled Jobs"
+                subtitle="Field visits dispatched for inspection and repair"
+                action={<Wrench size={16} color="#64748b" />}
+              >
+                <Stack gap="sm">
+                  {ticket.jobs.map((j) => (
+                    <Paper
+                      key={j.id}
+                      p="sm"
+                      withBorder
+                      style={{
+                        background: 'var(--sp-card)',
+                        borderColor: j.status === 'COMPLETED' ? '#0f766e' : 'var(--sp-border)',
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Group justify="space-between" align="center" wrap="wrap">
+                        <Group gap="sm">
+                          <ThemeIcon
+                            size={32}
+                            radius="md"
+                            color={j.status === 'COMPLETED' ? 'teal' : 'grape'}
+                            variant="light"
+                          >
+                            <Wrench size={16} />
+                          </ThemeIcon>
+                          <div>
+                            <Group gap="xs">
+                              <Text fz="xs" fw={700} className="sp-mono">
+                                {j.jobNumber}
+                              </Text>
+                              <Badge size="xs" color={j.status === 'COMPLETED' ? 'teal' : 'blue'}>
+                                {j.status}
+                              </Badge>
+                            </Group>
+                            <Text fz={11} c="dimmed">
+                              Tech: {j.technician?.name ?? 'Assigned'} · Date: {formatDate(j.scheduledDate)} ({j.scheduledSlot ?? 'Slot TBC'})
+                            </Text>
+                          </div>
+                        </Group>
+
+                        <Group gap="xs">
+                          {j.photos && j.photos.length > 0 && (
+                            <Badge size="xs" variant="light" color="cyan">
+                              {j.photos.length} Photo(s)
+                            </Badge>
+                          )}
+                          {j.signature && (
+                            <Badge size="xs" variant="light" color="teal">
+                              Signed by {j.signature.signerName}
+                            </Badge>
+                          )}
+                          <Button
+                            component={Link}
+                            href={`/dashboard/jobs/${j.id}`}
+                            size="compact-xs"
+                            variant="light"
+                            color="sun"
+                            rightSection={<ArrowRight size={12} />}
+                          >
+                            Open Job Card
+                          </Button>
+                        </Group>
+                      </Group>
+                    </Paper>
+                  ))}
+                </Stack>
+              </Panel>
+            )}
 
             {canEdit && (
               <Panel
@@ -567,10 +764,10 @@ function TicketDetail() {
                   </Group>
                   <Group justify="space-between">
                     <Text fz="xs" c="dimmed">
-                      Invoice total
+                      {invoice.total === 0 ? 'Warranty coverage' : 'Invoice total'}
                     </Text>
-                    <Text fz="sm" fw={800} className="sp-mono">
-                      {formatINR(invoice.total)}
+                    <Text fz="sm" fw={800} className="sp-mono" c={invoice.total === 0 ? 'teal.7' : undefined}>
+                      {invoice.total === 0 ? '₹0 (Covered 100%)' : formatINR(invoice.total)}
                     </Text>
                   </Group>
                   {canRecordPayment && invoice.status !== 'PAID' && (
@@ -595,7 +792,7 @@ function TicketDetail() {
               )}
               {!invoice && (
                 <Text fz="xs" c="dimmed" mt="sm">
-                  An invoice is created automatically when a billable ticket is resolved.
+                  An official repair bill (SP-INV-...) is created automatically and stored here when the technician completes the repair visit.
                 </Text>
               )}
             </Panel>

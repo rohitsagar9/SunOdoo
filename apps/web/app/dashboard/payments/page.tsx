@@ -91,6 +91,20 @@ function PaymentsQueue() {
       notifications.show({ title: 'Could not approve', message: apiError(error), color: 'red' }),
   });
 
+  const verifyCashMutation = useMutation({
+    mutationFn: async (id: string) => (await api.post(`/payments/${id}/verify-cash`)).data,
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Cash Deposit Verified',
+        message: 'Physical cash confirmed received in office. Order advance and installation job updated.',
+        color: 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not verify cash', message: apiError(error), color: 'red' }),
+  });
+
   const rejectMutation = useMutation({
     mutationFn: async ({ id, reason: text }: { id: string; reason: string }) =>
       (await api.post(`/payments/${id}/reject`, { reason: text })).data,
@@ -290,6 +304,11 @@ function PaymentsQueue() {
                       </Table.Td>
                       <Table.Td>
                         <Text fz="xs">{titleCase(payment.method)}</Text>
+                        {payment.credibilityConfirmed && (
+                          <Badge size="xs" color={payment.cashDepositVerified ? 'teal' : 'orange'} variant="light" mt={2}>
+                            {payment.cashDepositVerified ? 'Cash Verified' : 'Credibility Confirmed'}
+                          </Badge>
+                        )}
                         {payment.notes && (
                           <Text fz={10} c="dimmed" lineClamp={1} maw={160}>
                             {payment.notes}
@@ -321,6 +340,10 @@ function PaymentsQueue() {
                               Open
                             </Button>
                           </Group>
+                        ) : payment.method === 'CASH' ? (
+                          <Badge size="xs" variant="outline" color="teal">
+                            Physical Cash
+                          </Badge>
                         ) : (
                           <Group gap={4}>
                             <ImageIcon size={14} color="#94a3b8" />
@@ -343,10 +366,16 @@ function PaymentsQueue() {
                               size="compact-xs"
                               color="teal"
                               leftSection={<CheckCircle2 size={12} />}
-                              loading={approveMutation.isPending}
-                              onClick={() => approveMutation.mutate(payment.id)}
+                              loading={approveMutation.isPending || verifyCashMutation.isPending}
+                              onClick={() => {
+                                if (payment.method === 'CASH') {
+                                  verifyCashMutation.mutate(payment.id);
+                                } else {
+                                  approveMutation.mutate(payment.id);
+                                }
+                              }}
                             >
-                              Approve
+                              {payment.method === 'CASH' ? 'Confirm Cash & Approve' : 'Approve'}
                             </Button>
                             <Button
                               size="compact-xs"

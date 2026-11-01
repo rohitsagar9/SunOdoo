@@ -42,6 +42,7 @@ import {
   MapPin,
   Phone,
   Ruler,
+  ShieldAlert,
   ShieldCheck,
   StickyNote,
   Trophy,
@@ -100,12 +101,49 @@ function LeadDetail() {
   const lead = leadQuery.data;
 
   const [details, setDetails] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    city: '',
     requestedKw: '1',
     systemType: 'ON_GRID',
     monthlyBill: '',
     roofAreaSqft: '',
     notes: '',
   });
+  const [callState, setCallState] = useState<'IDLE' | 'CALLING' | 'COMPLETED'>('IDLE');
+  const [callSeconds, setCallSeconds] = useState(0);
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') === 'call') {
+        setCallState('CALLING');
+        if (lead?.customer?.phone) {
+          window.location.href = `tel:${lead.customer.phone}`;
+        }
+      }
+    }
+  }, [lead?.customer?.phone]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (callState === 'CALLING') {
+      timer = setInterval(() => setCallSeconds((s) => s + 1), 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [callState]);
+
+  const formatCallTimer = (sec: number) => {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
   const [surveyForm, setSurveyForm] = useState({
     technicianId: '',
     date: new Date().toISOString().slice(0, 10),
@@ -124,7 +162,7 @@ function LeadDetail() {
   const [quoteForm, setQuoteForm] = useState({
     capacityKw: '1',
     systemType: 'ON_GRID',
-    discount: '',
+    discountPercent: '',
     notes: '',
   });
   const [lostOpen, setLostOpen] = useState(false);
@@ -136,6 +174,10 @@ function LeadDetail() {
   useEffect(() => {
     if (!lead) return;
     setDetails({
+      name: lead.customer?.name ?? '',
+      phone: lead.customer?.phone ?? '',
+      address: lead.customer?.address ?? '',
+      city: lead.customer?.city ?? '',
       requestedKw: String(lead.requestedKw),
       systemType: lead.systemType,
       monthlyBill: lead.monthlyBill ? String(lead.monthlyBill) : '',
@@ -341,7 +383,7 @@ function LeadDetail() {
           leadId: id,
           capacityKw: quoteForm.capacityKw,
           systemType: quoteForm.systemType,
-          discount: quoteForm.discount || undefined,
+          discountPercent: quoteForm.discountPercent ? Number(quoteForm.discountPercent) : undefined,
           notes: quoteForm.notes || undefined,
         })
       ).data as { id: string; quoteNumber: string; total: number },
@@ -357,6 +399,37 @@ function LeadDetail() {
     },
     onError: (error) =>
       notifications.show({ title: 'Could not generate quote', message: apiError(error), color: 'red' }),
+  });
+
+  const salesDecisionMutation = useMutation({
+    mutationFn: async (payload: {
+      decision: 'OVERRIDE_TO_FEASIBLE' | 'CONFIRM_NOT_FEASIBLE' | 'CONFIRM_FEASIBLE';
+      reason?: string;
+    }) => {
+      if (!lead?.survey?.id) return;
+      return (await api.post(`/surveys/${lead.survey.id}/sales-decision`, payload)).data;
+    },
+    onSuccess: (_data, vars) => {
+      invalidate();
+      setOverrideModalOpen(false);
+      notifications.show({
+        title:
+          vars.decision === 'OVERRIDE_TO_FEASIBLE'
+            ? 'Technical Rejection Overridden'
+            : vars.decision === 'CONFIRM_NOT_FEASIBLE'
+              ? 'Survey Infeasibility Confirmed'
+              : 'Survey Feasibility Confirmed',
+        message:
+          vars.decision === 'OVERRIDE_TO_FEASIBLE'
+            ? 'Roof marked feasible by sales with explanation. Quotation unlocked.'
+            : vars.decision === 'CONFIRM_NOT_FEASIBLE'
+              ? 'Lead marked as LOST.'
+              : 'Survey approved. You can now issue the quote.',
+        color: vars.decision === 'CONFIRM_NOT_FEASIBLE' ? 'red' : 'teal',
+      });
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Decision error', message: apiError(error), color: 'red' }),
   });
 
   const statusMutation = useMutation({
@@ -397,17 +470,55 @@ function LeadDetail() {
               color="gray"
               leftSection={<ArrowLeft size={15} />}
             >
-              Kanban
+              Back to queue
             </Button>
-            <Button
-              component="a"
-              href={`tel:${lead.customer?.phone ?? ''}`}
-              variant="light"
-              color="teal"
-              leftSection={<Phone size={15} />}
-            >
-              Call customer
-            </Button>
+            {callState === 'IDLE' && (
+              <Button
+                color="teal"
+                leftSection={<Phone size={15} />}
+                onClick={() => {
+                  setCallState('CALLING');
+                  if (lead.customer?.phone) {
+                    window.location.href = `tel:${lead.customer.phone}`;
+                  }
+                }}
+              >
+                Call Customer
+              </Button>
+            )}
+            {callState === 'CALLING' && (
+              <Button
+                color="red"
+                variant="filled"
+                leftSection={<Phone size={15} />}
+                onClick={() => {
+                  setCallState('COMPLETED');
+                  notifications.show({
+                    title: 'Call Completed',
+                    message: `Call with ${lead.customer?.name} ended (${formatCallTimer(callSeconds)}). Please review or edit customer submitted form details below and book survey.`,
+                    color: 'teal',
+                  });
+                }}
+              >
+                🔴 Calling in progress ({formatCallTimer(callSeconds)}) · Click When Call is Completed
+              </Button>
+            )}
+            {callState === 'COMPLETED' && (
+              <Button
+                color="teal"
+                variant="light"
+                leftSection={<Phone size={15} />}
+                onClick={() => {
+                  setCallState('CALLING');
+                  setCallSeconds(0);
+                  if (lead.customer?.phone) {
+                    window.location.href = `tel:${lead.customer.phone}`;
+                  }
+                }}
+              >
+                ✅ Call Completed ({formatCallTimer(callSeconds)}) · Start Calling Again
+              </Button>
+            )}
           </>
         }
       />
@@ -432,11 +543,38 @@ function LeadDetail() {
         <Grid.Col span={{ base: 12, lg: 8 }}>
           <Stack gap="md">
             <Panel
-              title="Qualification & requirement"
-              subtitle="Verify the bill and roof before booking a survey"
+              title="Qualification & customer enquiry details"
+              subtitle="Edit and verify the customer's submitted details while calling before booking survey"
               action={<ClipboardCheck size={16} color="#64748b" />}
             >
               <Stack gap="md">
+                {callState === 'CALLING' && (
+                  <Alert color="yellow" variant="light" title={`Active call with ${lead.customer?.name} (${lead.customer?.phone})`}>
+                    Calling in progress! Edit the customer&apos;s submitted details below in real-time, then click &quot;Save changes&quot; and book the survey.
+                  </Alert>
+                )}
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                  <TextInput
+                    label="Customer name"
+                    value={details.name}
+                    onChange={(e) => setDetails((c) => ({ ...c, name: e.target.value }))}
+                  />
+                  <TextInput
+                    label="Phone number"
+                    value={details.phone}
+                    onChange={(e) => setDetails((c) => ({ ...c, phone: e.target.value }))}
+                  />
+                  <TextInput
+                    label="Installation address"
+                    value={details.address}
+                    onChange={(e) => setDetails((c) => ({ ...c, address: e.target.value }))}
+                  />
+                  <TextInput
+                    label="City / District"
+                    value={details.city}
+                    onChange={(e) => setDetails((c) => ({ ...c, city: e.target.value }))}
+                  />
+                </SimpleGrid>
                 <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
                   <TextInput
                     label="Size (kW)"
@@ -517,6 +655,10 @@ function LeadDetail() {
                     color="sun"
                     onClick={() =>
                       updateMutation.mutate({
+                        name: details.name || undefined,
+                        phone: details.phone || undefined,
+                        address: details.address || undefined,
+                        city: details.city || undefined,
                         requestedKw: Number(details.requestedKw) || 1,
                         systemType: details.systemType,
                         monthlyBill: details.monthlyBill ? Number(details.monthlyBill) : 0,
@@ -684,17 +826,70 @@ function LeadDetail() {
                     </Badge>
                   </Group>
 
-                  {survey.findings?.includes('[DISAPPROVED') && (
-                    <Alert color="red" variant="light" title="Roof Survey Disapproved / Infeasible">
-                      <Text fz="xs" mb={4}>
-                        The technician reported that the roof cannot safely support installation.
+                  {survey.overrideReason && (
+                    <Alert color="indigo" variant="light" title="Sales Feasibility Override Active" icon={<ShieldCheck size={16} />}>
+                      <Text fz="xs">
+                        Technician rejection was overridden by Sales with justification: <strong>{survey.overrideReason}</strong>
                       </Text>
-                      <Text fz="xs" fw={700}>
-                        Reason: {survey.findings}
-                      </Text>
-                      <Text fz={11} c="dimmed" mt={4}>
-                        Sales cannot generate a quote unless feasibility issues are resolved and re-approved.
-                      </Text>
+                    </Alert>
+                  )}
+
+                  {(survey.technicianAssessment === 'NOT_FEASIBLE' || survey.findings?.includes('[DISAPPROVED') || survey.findings?.includes('[Technician: NOT FEASIBLE]')) && !survey.overrideReason && (
+                    <Alert color="red" variant="light" title="Field Technician Assessment: NOT FEASIBLE" icon={<ShieldAlert size={16} />}>
+                      <Stack gap="xs">
+                        <Text fz="xs">
+                          The field technician evaluated this rooftop and flagged it as <strong>NOT FEASIBLE</strong>.
+                        </Text>
+                        {survey.findings && (
+                          <Paper p="xs" bg="rgba(220, 38, 38, 0.08)" withBorder style={{ borderColor: 'rgba(220, 38, 38, 0.2)' }}>
+                            <Text fz="xs" fw={600} c="red.7">
+                              Findings: {survey.findings}
+                            </Text>
+                          </Paper>
+                        )}
+                        <Text fz="xs" c="dimmed">
+                          Sales Action: You can agree and confirm the rejection (marking the lead as lost), or override to Feasible with a detailed justification (e.g. customized elevated mounting structure or tree pruning agreement).
+                        </Text>
+                        <Group gap="sm" mt={4}>
+                          <Button
+                            size="xs"
+                            color="red"
+                            variant="light"
+                            leftSection={<XCircle size={14} />}
+                            loading={salesDecisionMutation.isPending}
+                            onClick={() => salesDecisionMutation.mutate({ decision: 'CONFIRM_NOT_FEASIBLE' })}
+                          >
+                            Confirm Infeasible (Mark Lead Lost)
+                          </Button>
+                          <Button
+                            size="xs"
+                            color="sun"
+                            leftSection={<ShieldCheck size={14} />}
+                            onClick={() => setOverrideModalOpen(true)}
+                          >
+                            Override to Feasible (Provide Explanation)
+                          </Button>
+                        </Group>
+                      </Stack>
+                    </Alert>
+                  )}
+
+                  {survey.technicianAssessment === 'FEASIBLE' && !survey.approved && (
+                    <Alert color="teal" variant="light" title="Field Technician Assessment: FEASIBLE" icon={<ShieldCheck size={16} />}>
+                      <Group justify="space-between" align="center" wrap="wrap">
+                        <Text fz="xs">
+                          Field technician completed the roof measurements and marked this rooftop as feasible for solar installation.
+                        </Text>
+                        <Button
+                          size="xs"
+                          color="teal"
+                          leftSection={<ShieldCheck size={14} />}
+                          loading={salesDecisionMutation.isPending}
+                          onClick={() => salesDecisionMutation.mutate({ decision: 'CONFIRM_FEASIBLE' })}
+                        >
+                          Confirm Feasibility & Approve
+                        </Button>
+                      </Group>
                     </Alert>
                   )}
 
@@ -1105,11 +1300,16 @@ function LeadDetail() {
               }
             />
             <NumberInput
-              label="Discount (₹)"
+              label="Customizable Discount (%)"
+              description="Enter percentage (e.g. 1 means 1% off, 2 means 2% off)"
               min={0}
-              value={quoteForm.discount}
+              max={50}
+              step={0.5}
+              suffix="%"
+              placeholder="0%"
+              value={quoteForm.discountPercent}
               onChange={(value) =>
-                setQuoteForm((current) => ({ ...current, discount: String(value) }))
+                setQuoteForm((current) => ({ ...current, discountPercent: String(value) }))
               }
             />
           </SimpleGrid>
@@ -1143,6 +1343,47 @@ function LeadDetail() {
             </Button>
             <Button color="sun" onClick={() => quoteMutation.mutate()} loading={quoteMutation.isPending}>
               Generate quote
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={overrideModalOpen}
+        onClose={() => setOverrideModalOpen(false)}
+        title="Sales Feasibility Override & Justification"
+        size="md"
+        radius="md"
+      >
+        <Stack gap="md">
+          <Alert color="orange" variant="light" title="Overriding Field Assessment">
+            The field technician assessed this site as <strong>NOT FEASIBLE</strong>.
+            To proceed, enter an operational justification explaining how the site constraints are resolved (e.g. customized 4ft elevated mounts, customer agreed to prune trees, or relocated solar array to secondary terrace).
+          </Alert>
+          <Textarea
+            label="Mandatory Override Explanation"
+            placeholder="Explain why this installation can proceed despite the technician's findings..."
+            minRows={3}
+            required
+            value={overrideReason}
+            onChange={(e) => setOverrideReason(e.target.value)}
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" color="gray" onClick={() => setOverrideModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              color="sun"
+              disabled={overrideReason.trim().length < 5}
+              loading={salesDecisionMutation.isPending}
+              onClick={() =>
+                salesDecisionMutation.mutate({
+                  decision: 'OVERRIDE_TO_FEASIBLE',
+                  reason: overrideReason.trim(),
+                })
+              }
+            >
+              Approve with Override
             </Button>
           </Group>
         </Stack>

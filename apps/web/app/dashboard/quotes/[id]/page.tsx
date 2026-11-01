@@ -59,7 +59,7 @@ function QuoteDetail() {
   const id = params?.id;
   const queryClient = useQueryClient();
   const [recalcOpen, setRecalcOpen] = useState(false);
-  const [recalc, setRecalc] = useState({ capacityKw: '1', systemType: 'ON_GRID', discount: '0' });
+  const [recalc, setRecalc] = useState({ capacityKw: '1', systemType: 'ON_GRID', discountPercent: '0' });
 
   const query = useQuery({
     queryKey: ['quote', id],
@@ -107,7 +107,7 @@ function QuoteDetail() {
         await api.post(`/quotes/${id}/recalculate`, {
           capacityKw: recalc.capacityKw,
           systemType: recalc.systemType,
-          discount: recalc.discount,
+          discountPercent: recalc.discountPercent ? Number(recalc.discountPercent) : 0,
         })
       ).data,
     onSuccess: () => {
@@ -338,10 +338,10 @@ function QuoteDetail() {
                 </Group>
                 {quote.discount > 0 && (
                   <Group justify="space-between" mb={6}>
-                    <Text fz="sm" c="dimmed">
-                      Discount
+                    <Text fz="sm" c="teal.7">
+                      Discount {quote.discountPercent ? `(${quote.discountPercent}%)` : ''}
                     </Text>
-                    <Text fz="sm" c="red.6" className="sp-mono">
+                    <Text fz="sm" c="teal.7" className="sp-mono">
                       − {formatINR(quote.discount)}
                     </Text>
                   </Group>
@@ -476,7 +476,7 @@ function QuoteDetail() {
                       setRecalc({
                         capacityKw: String(quote.capacityKw),
                         systemType: quote.systemType,
-                        discount: String(quote.discount),
+                        discountPercent: String(quote.discountPercent ?? 0),
                       });
                       setRecalcOpen(true);
                     }}
@@ -635,10 +635,15 @@ function QuoteDetail() {
               onChange={(value) => setRecalc((current) => ({ ...current, capacityKw: String(value) }))}
             />
             <NumberInput
-              label="Discount (₹)"
+              label="Customizable Discount (%)"
+              description="e.g. 1 means 1%, 2 means 2%"
               min={0}
-              value={recalc.discount}
-              onChange={(value) => setRecalc((current) => ({ ...current, discount: String(value) }))}
+              max={50}
+              step={0.5}
+              suffix="%"
+              placeholder="0%"
+              value={recalc.discountPercent}
+              onChange={(value) => setRecalc((current) => ({ ...current, discountPercent: String(value) }))}
             />
           </SimpleGrid>
           <div>

@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { AppError, notFound } from '../lib/errors.js';
 import { createTicket, updateTicket } from '../services/tickets.js';
 import { warrantyStatus } from '../services/warranty.js';
-import { nextJobNumber } from '../lib/sequence.js';
+import { nextInvoiceNumber, nextJobNumber } from '../lib/sequence.js';
 import { audit } from '../lib/audit.js';
 
 const ticketListInclude = {
@@ -234,6 +234,70 @@ export const ticketRoutes: FastifyPluginAsync = async (app) => {
       });
 
       return updated;
+    },
+  );
+
+  app.post(
+    '/tickets/:id/generate-bill',
+    { preHandler: [app.authenticate, app.authorize('SUPPORT', 'DIRECTOR', 'TECHNICIAN', 'SALES')] },
+    async (request, reply) => {
+      const { id } = z.object({ id: z.string() }).parse(request.params);
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+        include: ticketDetailInclude,
+      });
+      if (!ticket) throw notFound('Ticket');
+
+      let invoice = ticket.invoices[0];
+      if (!invoice) {
+        const invoiceNumber = await nextInvoiceNumber();
+        const subtotal = ticket.billable ? ticket.totalCharge : 0;
+        const taxRate = ticket.billable && subtotal > 0 ? 18 : 0;
+        const taxAmount = Math.round(subtotal * (taxRate / 100));
+        const total = subtotal + taxAmount;
+        const now = new Date();
+
+        invoice = await prisma.invoice.create({
+          data: {
+            invoiceNumber,
+            customerId: ticket.customerId,
+            ticketId: ticket.id,
+            type: 'REPAIR',
+            subtotal,
+            taxRate,
+            taxAmount,
+            total,
+            status: ticket.billable && total > 0 ? 'SENT' : 'PAID',
+            paidAt: ticket.billable && total > 0 ? undefined : now,
+            dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+            createdById: request.user.sub,
+          },
+        });
+
+        await prisma.ticketUpdate.create({
+          data: {
+            ticketId: ticket.id,
+            authorId: request.user.sub,
+            message: `Official Service Bill & Tax Invoice #${invoiceNumber} generated (${
+              total === 0 ? '₹0 Covered under Warranty' : `₹${total} Billable`
+            }).`,
+            statusTo: ticket.status,
+          },
+        });
+
+        await audit(request.user.sub, 'INVOICE_GENERATED', 'Invoice', invoice.id, {
+          invoiceNumber,
+          ticketId: ticket.id,
+          total,
+        });
+      }
+
+      const refreshed = await prisma.ticket.findUnique({
+        where: { id },
+        include: ticketDetailInclude,
+      });
+
+      return reply.code(200).send({ ticket: refreshed, invoice });
     },
   );
 

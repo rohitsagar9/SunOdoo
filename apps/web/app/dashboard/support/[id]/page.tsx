@@ -32,11 +32,13 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  FileText,
   Headphones,
   IndianRupee,
   MessageSquare,
   Phone,
   Plus,
+  Printer,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -44,6 +46,7 @@ import {
   Wallet,
   Wrench,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import { api, apiError } from '@/lib/api';
 import { formatDate, formatDateTime, formatINR, safeValue, titleCase } from '@/lib/format';
@@ -51,6 +54,7 @@ import { useAuth } from '@/lib/auth';
 import type { AuthUser, Ticket } from '@/lib/types';
 import { StatusBadge } from '@/components/StatusBadge';
 import { LoadingState } from '@/components/States';
+import { ServiceInvoiceModal } from '@/components/ServiceInvoiceModal';
 import { InlineStat, Panel } from '@/components/dashboard/Panel';
 import { RoleGate } from '@/components/dashboard/RoleGate';
 
@@ -82,6 +86,7 @@ function TicketDetail() {
   const queryClient = useQueryClient();
   const [note, setNote] = useState('');
   const [payOpen, setPayOpen] = useState(false);
+  const [billModalOpen, setBillModalOpen] = useState(false);
   const [payment, setPayment] = useState({ amount: '', method: 'UPI', reference: '' });
   const [work, setWork] = useState({
     status: 'OPEN',
@@ -127,6 +132,21 @@ function TicketDetail() {
     queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     queryClient.invalidateQueries({ queryKey: ['payments'] });
   }
+
+  const generateBillMutation = useMutation({
+    mutationFn: async () => (await api.post(`/tickets/${id}/generate-bill`)).data,
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Service Bill Generated',
+        message: 'Official Tax Invoice has been generated for this repair service.',
+        color: 'teal',
+      });
+      setBillModalOpen(true);
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not generate bill', message: apiError(error), color: 'red' }),
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>) =>
@@ -770,11 +790,25 @@ function TicketDetail() {
                       {invoice.total === 0 ? '₹0 (Covered 100%)' : formatINR(invoice.total)}
                     </Text>
                   </Group>
+
+                  <Button
+                    color="sun"
+                    size="xs"
+                    leftSection={<FileText size={14} />}
+                    mt="sm"
+                    fullWidth
+                    onClick={() => setBillModalOpen(true)}
+                  >
+                    View & Print Official Service Bill
+                  </Button>
+
                   {canRecordPayment && invoice.status !== 'PAID' && (
                     <Button
-                      color="sun"
-                      leftSection={<Wallet size={15} />}
-                      mt="md"
+                      color="orange"
+                      variant="light"
+                      size="xs"
+                      leftSection={<Wallet size={14} />}
+                      mt="xs"
                       fullWidth
                       onClick={() => {
                         setPayment({
@@ -791,9 +825,22 @@ function TicketDetail() {
                 </>
               )}
               {!invoice && (
-                <Text fz="xs" c="dimmed" mt="sm">
-                  An official repair bill (SP-INV-...) is created automatically and stored here when the technician completes the repair visit.
-                </Text>
+                <Stack gap="xs" mt="sm">
+                  <Text fz="xs" c="dimmed">
+                    Official Service Bill (SP-INV-...) is created automatically on repair completion. You can also generate it manually now:
+                  </Text>
+                  <Button
+                    color="sun"
+                    size="xs"
+                    variant="light"
+                    leftSection={<Zap size={14} />}
+                    fullWidth
+                    loading={generateBillMutation.isPending}
+                    onClick={() => generateBillMutation.mutate()}
+                  >
+                    Generate Official Service Bill
+                  </Button>
+                </Stack>
               )}
             </Panel>
 
@@ -915,6 +962,19 @@ function TicketDetail() {
           </Group>
         </Stack>
       </Modal>
+
+      {invoice && ticket && (
+        <ServiceInvoiceModal
+          opened={billModalOpen}
+          onClose={() => setBillModalOpen(false)}
+          invoice={invoice}
+          ticket={ticket}
+          job={ticket.jobs?.[0] || null}
+          customer={ticket.customer}
+          signature={ticket.jobs?.[0]?.signature || null}
+          photos={ticket.jobs?.[0]?.photos || []}
+        />
+      )}
     </>
   );
 }

@@ -540,6 +540,9 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
           completionNotes: z.string().max(3000).optional(),
           systemSizeKw: z.coerce.number().min(0.5).max(20).optional(),
           testResult: z.string().max(200).optional(),
+          laborCharge: z.coerce.number().int().min(0).optional(),
+          partsCharge: z.coerce.number().int().min(0).optional(),
+          billable: z.boolean().optional(),
         })
         .parse(request.body ?? {});
 
@@ -556,27 +559,34 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
       const now = new Date();
 
       const updated = await prisma.$transaction(async (tx) => {
-        const result = await tx.job.update({
-          where: { id },
-          data: {
-            status: 'COMPLETED',
-            completedAt: now,
-            completionNotes: [body.completionNotes, body.testResult ? `Test: ${body.testResult}` : null]
-              .filter(Boolean)
-              .join('\n'),
-          },
-          include: jobInclude,
-        });
+        let ticketId = job.ticketId;
+        if (!ticketId && job.type === 'REPAIR') {
+          const matched = await tx.ticket.findFirst({
+            where: {
+              customerId: job.customerId,
+              status: { in: ['OPEN', 'IN_PROGRESS', 'RESOLVED'] },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (matched) {
+            ticketId = matched.id;
+          }
+        }
 
-        if (job.ticketId) {
-          const ticket = await tx.ticket.findUnique({ where: { id: job.ticketId } });
+        if (ticketId) {
+          const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
           if (ticket) {
+            const labor = body.laborCharge !== undefined ? body.laborCharge : ticket.laborCharge;
+            const parts = body.partsCharge !== undefined ? body.partsCharge : ticket.partsCharge;
+            const isBillable = body.billable !== undefined ? body.billable : ticket.billable;
+            const totalCharge = isBillable ? labor + parts : 0;
+
             const existingInvoice = await tx.invoice.findFirst({ where: { ticketId: ticket.id } });
             let invoiceNumber = existingInvoice?.invoiceNumber;
             if (!existingInvoice) {
               invoiceNumber = await nextInvoiceNumber();
-              const subtotal = ticket.billable ? ticket.totalCharge : 0;
-              const taxRate = ticket.billable ? 18 : 0;
+              const subtotal = isBillable ? totalCharge : 0;
+              const taxRate = isBillable && subtotal > 0 ? 18 : 0;
               const taxAmount = Math.round(subtotal * (taxRate / 100));
               const total = subtotal + taxAmount;
 
@@ -590,8 +600,8 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
                   taxRate,
                   taxAmount,
                   total,
-                  status: ticket.billable ? 'SENT' : 'PAID',
-                  paidAt: ticket.billable ? undefined : now,
+                  status: isBillable && total > 0 ? 'SENT' : 'PAID',
+                  paidAt: isBillable && total > 0 ? undefined : now,
                   dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
                   createdById: request.user.sub,
                 },
@@ -603,6 +613,10 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
               data: {
                 status: 'RESOLVED',
                 resolvedAt: now,
+                laborCharge: labor,
+                partsCharge: parts,
+                totalCharge,
+                billable: isBillable,
                 resolution: body.completionNotes || 'Repair completed on site with signature and photos.',
               },
             });
@@ -612,13 +626,54 @@ export const jobRoutes: FastifyPluginAsync = async (app) => {
                 ticketId: ticket.id,
                 authorId: request.user.sub,
                 message: `Technician completed repair visit with customer signature and proof photos. Generated Repair Bill #${invoiceNumber} (${
-                  ticket.billable ? `₹${ticket.totalCharge}` : '₹0 - Covered under warranty'
+                  isBillable && totalCharge > 0 ? `₹${totalCharge}` : '₹0 - Covered under warranty'
                 }).`,
                 statusTo: 'RESOLVED',
               },
             });
           }
+        } else if (job.type === 'REPAIR') {
+          const existingInvoice = await tx.invoice.findFirst({
+            where: { customerId: job.customerId, type: 'REPAIR', createdAt: { gte: new Date(now.getTime() - 24 * 3600000) } },
+          });
+          if (!existingInvoice) {
+            const invoiceNumber = await nextInvoiceNumber();
+            const labor = body.laborCharge ?? 0;
+            const parts = body.partsCharge ?? 0;
+            const subtotal = labor + parts;
+            const taxRate = subtotal > 0 ? 18 : 0;
+            const taxAmount = Math.round(subtotal * (taxRate / 100));
+            const total = subtotal + taxAmount;
+            await tx.invoice.create({
+              data: {
+                invoiceNumber,
+                customerId: job.customerId,
+                type: 'REPAIR',
+                subtotal,
+                taxRate,
+                taxAmount,
+                total,
+                status: total > 0 ? 'SENT' : 'PAID',
+                paidAt: total > 0 ? undefined : now,
+                dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+                createdById: request.user.sub,
+              },
+            });
+          }
         }
+
+        const result = await tx.job.update({
+          where: { id },
+          data: {
+            status: 'COMPLETED',
+            ticketId: ticketId || undefined,
+            completedAt: now,
+            completionNotes: [body.completionNotes, body.testResult ? `Test: ${body.testResult}` : null]
+              .filter(Boolean)
+              .join('\n'),
+          },
+          include: jobInclude,
+        });
 
         if (job.order) {
           await tx.order.update({

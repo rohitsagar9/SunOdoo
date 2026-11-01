@@ -1,13 +1,16 @@
 # SunOdoo Platform Logs & Audit Trail
 
-*Generated: 2026-11-01T02:12:09.750Z*
+*Generated: 2026-11-01T02:50:13.795Z*
 
-Total audit records: **549**
+Total audit records: **552**
 
 ## 1. System Audit Trail (Database Activity Logs)
 
 | Timestamp | User | Role | Action | Entity | Entity ID | Details / Metadata |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1/11/2026, 8:19:35 am | Meera Nair | `SUPPORT` | **LOGIN** | User | `cmvwhpynd0005u4u...` | — |
+| 1/11/2026, 8:18:49 am | Arun Kumar | `TECHNICIAN` | **LOGIN** | User | `cmvwhpyn70002u4u...` | — |
+| 1/11/2026, 8:18:42 am | Meera Nair | `SUPPORT` | **LOGIN** | User | `cmvwhpynd0005u4u...` | — |
 | 1/11/2026, 6:26:49 am | Arun Kumar | `TECHNICIAN` | **LOGIN** | User | `cmvwhpyn70002u4u...` | — |
 | 1/11/2026, 6:18:10 am | Aditya Mehta | `DIRECTOR` | **SUBSIDY_UPDATED** | SubsidyRecord | `cmvwvkgby007zu4l...` | {"status":"APPROVED"} |
 | 1/11/2026, 6:17:37 am | Aditya Mehta | `DIRECTOR` | **RESTOCK_APPROVED** | Expense | `cmvx41orb00cqu4g...` | {"quantity":5,"productId":"cmvwhpyns0007u4u44il6ih4j","amountDeducted":180000} |

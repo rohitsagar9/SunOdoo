@@ -31,12 +31,14 @@ import {
 import { notifications } from '@mantine/notifications';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Camera,
   CheckCircle2,
   Clock3,
   FileImage,
+  FileText,
   Headphones,
   IndianRupee,
   LogIn,
@@ -45,6 +47,7 @@ import {
   Package,
   PenLine,
   Phone,
+  Printer,
   ShieldAlert,
   ShieldCheck,
   Signature,
@@ -54,6 +57,7 @@ import {
   UserRound,
   Wallet,
   Wrench,
+  Zap,
 } from 'lucide-react';
 import { api, apiError, assetUrl } from '@/lib/api';
 import { formatDate, formatDateTime, formatINR, formatTime, safeValue, titleCase } from '@/lib/format';
@@ -63,6 +67,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { LoadingState } from '@/components/States';
 import { SignaturePad } from '@/components/SignaturePad';
 import { PaymentQR } from '@/components/PaymentQR';
+import { ServiceInvoiceModal } from '@/components/ServiceInvoiceModal';
 import { InlineStat, Panel } from '@/components/dashboard/Panel';
 import { RoleGate } from '@/components/dashboard/RoleGate';
 
@@ -117,6 +122,7 @@ function JobDetail() {
     notes: '',
   });
   const [siteFile, setSiteFile] = useState<File | null>(null);
+  const [billModalOpen, setBillModalOpen] = useState(false);
 
   useEffect(() => {
     if (job) {
@@ -219,7 +225,25 @@ function JobDetail() {
     queryClient.invalidateQueries({ queryKey: ['order'] });
     queryClient.invalidateQueries({ queryKey: ['orders'] });
     queryClient.invalidateQueries({ queryKey: ['payments'] });
+    queryClient.invalidateQueries({ queryKey: ['ticket'] });
+    queryClient.invalidateQueries({ queryKey: ['tickets'] });
   }
+
+  const generateBillMutation = useMutation({
+    mutationFn: async (ticketId: string) =>
+      (await api.post(`/tickets/${ticketId}/generate-bill`)).data,
+    onSuccess: () => {
+      invalidate();
+      notifications.show({
+        title: 'Service Bill Generated',
+        message: 'Official Tax Invoice has been generated for this repair service.',
+        color: 'teal',
+      });
+      setBillModalOpen(true);
+    },
+    onError: (error) =>
+      notifications.show({ title: 'Could not generate bill', message: apiError(error), color: 'red' }),
+  });
 
   const clockInMutation = useMutation({
     mutationFn: async () => (await api.post(`/jobs/${id}/clock-in`)).data,
@@ -465,16 +489,19 @@ function JobDetail() {
     },
     onSuccess: () => {
       invalidate();
+      if (isRepair) {
+        setBillModalOpen(true);
+      }
       notifications.show({
         title: isSurvey
           ? 'Survey assessment submitted'
           : isRepair
-            ? 'Repair Completed & Invoice Generated in Support'
+            ? 'Repair Completed & Invoice Generated'
             : 'Installation Completed & Handed Over to Support',
         message: isSurvey
           ? 'Roof feasibility recorded. The sales desk can now generate the quotation.'
           : isRepair
-            ? 'The repair visit is closed with customer signature and proof photos. Bill generated and stored in Support!'
+            ? 'The repair visit is closed with customer signature and proof photos. Official service bill generated!'
             : 'The order is marked installed and warranty records are live.',
         color: 'teal',
       });
@@ -1440,63 +1467,182 @@ function JobDetail() {
                   />
 
                   {job.status === 'COMPLETED' ? (
-                    <Alert color="teal" variant="light" radius="md" icon={<CheckCircle2 size={16} />}>
-                      <Group justify="space-between" align="center" wrap="wrap">
-                        <Text fz="sm">
-                          ✓ Repair Completed! Customer signature and photo proof saved. Official repair bill generated.
-                        </Text>
-                        {job.ticket && (
+                    job.ticket?.invoices?.[0] ? (
+                      <Paper
+                        p="md"
+                        radius="md"
+                        withBorder
+                        style={{
+                          background: 'var(--sp-card-subtle, rgba(0, 0, 0, 0.02))',
+                          borderColor: 'var(--sp-border)',
+                        }}
+                      >
+                        <Group justify="space-between" align="center" wrap="wrap" mb="xs">
+                          <Group gap="xs">
+                            <ThemeIcon size={34} radius="md" color="sun" variant="light">
+                              <FileText size={18} />
+                            </ThemeIcon>
+                            <div>
+                              <Group gap={6} align="center">
+                                <Text fz="sm" fw={800} className="sp-mono">
+                                  {job.ticket.invoices[0].invoiceNumber}
+                                </Text>
+                                <StatusBadge status={job.ticket.invoices[0].status} size="xs" />
+                              </Group>
+                              <Text fz={11} c="dimmed">
+                                Official SolarCare™ Service Bill & Tax Receipt · {formatDate(job.ticket.invoices[0].createdAt)}
+                              </Text>
+                            </div>
+                          </Group>
+                          <div style={{ textAlign: 'right' }}>
+                            <Text fz={10} c="dimmed" tt="uppercase" fw={700}>
+                              Total Amount
+                            </Text>
+                            <Text
+                              fz="md"
+                              fw={900}
+                              className="sp-mono"
+                              c={job.ticket.invoices[0].total === 0 ? 'teal.7' : 'orange.7'}
+                            >
+                              {job.ticket.invoices[0].total === 0
+                                ? '₹0 (100% Free Warranty Coverage)'
+                                : formatINR(job.ticket.invoices[0].total)}
+                            </Text>
+                          </div>
+                        </Group>
+
+                        <Divider my="xs" />
+
+                        <Group justify="space-between" align="center" wrap="wrap">
+                          <Group gap="lg">
+                            <Group gap={4}>
+                              <CheckCircle2 size={13} color="#0f766e" />
+                              <Text fz={11} c="teal.7" fw={600}>
+                                Customer Signature Verified
+                              </Text>
+                            </Group>
+                            <Group gap={4}>
+                              <ShieldCheck size={13} color="#0f766e" />
+                              <Text fz={11} c="dimmed">
+                                {job.ticket.warrantyStatus === 'IN_WARRANTY'
+                                  ? 'Active 10-Yr Warranty'
+                                  : 'Out of Warranty (Billable)'}
+                              </Text>
+                            </Group>
+                          </Group>
+
+                          <Group gap="xs">
+                            <Button
+                              color="sun"
+                              size="xs"
+                              leftSection={<FileText size={14} />}
+                              onClick={() => setBillModalOpen(true)}
+                            >
+                              View & Print Official Service Bill
+                            </Button>
+                            <Button
+                              component={Link}
+                              href={`/dashboard/support/${job.ticket.id}`}
+                              size="xs"
+                              variant="default"
+                              rightSection={<ArrowRight size={13} />}
+                            >
+                              Support Ticket (#{job.ticket.ticketNumber})
+                            </Button>
+                          </Group>
+                        </Group>
+                      </Paper>
+                    ) : (
+                      <Alert color="orange" variant="light" radius="md" icon={<AlertCircle size={16} />}>
+                        <Group justify="space-between" align="center" wrap="wrap">
+                          <div>
+                            <Text fz="sm" fw={700}>
+                              Service Completed · Service Bill Pending Generation
+                            </Text>
+                            <Text fz={11} c="dimmed">
+                              Customer sign-off and photo proof saved. Click below to generate the official tax invoice.
+                            </Text>
+                          </div>
+                          {job.ticket && (
+                            <Button
+                              color="sun"
+                              size="xs"
+                              loading={generateBillMutation.isPending}
+                              onClick={() => generateBillMutation.mutate(job.ticket!.id)}
+                            >
+                              Generate Official Service Bill Now
+                            </Button>
+                          )}
+                        </Group>
+                      </Alert>
+                    )
+                  ) : (
+                    <>
+                      <Paper
+                        p="xs"
+                        radius="sm"
+                        withBorder
+                        style={{
+                          background: 'var(--sp-card-subtle, rgba(0, 0, 0, 0.02))',
+                          borderColor: 'var(--sp-border)',
+                        }}
+                      >
+                        <Group justify="space-between" align="center" wrap="wrap">
+                          <Group gap={6}>
+                            <ShieldCheck size={14} color={job.ticket?.warrantyStatus === 'IN_WARRANTY' ? '#0f766e' : '#d97706'} />
+                            <Text fz={11} fw={700} c={job.ticket?.warrantyStatus === 'IN_WARRANTY' ? 'teal.7' : 'orange.7'}>
+                              {job.ticket?.warrantyStatus === 'IN_WARRANTY'
+                                ? '✓ Under Active 10-Yr SolarCare™ Warranty'
+                                : 'Out-of-Warranty Billable Repair'}
+                            </Text>
+                          </Group>
+                          <Text fz={11} c="dimmed">
+                            {job.ticket?.warrantyStatus === 'IN_WARRANTY'
+                              ? 'Official Service Bill will be generated as ₹0 (100% Free Coverage)'
+                              : `Billable: Labour ${formatINR(job.ticket?.laborCharge ?? 800)} + Parts ${formatINR(job.ticket?.partsCharge ?? 0)} + 18% GST`}
+                          </Text>
+                        </Group>
+                      </Paper>
+
+                      <Group justify="space-between" wrap="wrap">
+                        <Group gap="md" wrap="wrap">
+                          <Group gap={6}>
+                            <CheckCircle2 size={14} color={photosReady ? '#0f766e' : '#94a3b8'} />
+                            <Text fz={11} c={photosReady ? 'teal.7' : 'dimmed'}>
+                              Proof Photos ({photos.length})
+                            </Text>
+                          </Group>
+                          <Group gap={6}>
+                            <Signature size={14} color={signatureReady ? '#0f766e' : '#94a3b8'} />
+                            <Text fz={11} c={signatureReady ? 'teal.7' : 'dimmed'}>
+                              Customer Signature {signatureReady ? '✓' : 'Pending'}
+                            </Text>
+                          </Group>
+                          <Group gap={6}>
+                            <ShieldCheck size={14} color={job.ticket?.approvedAt ? '#0f766e' : '#94a3b8'} />
+                            <Text fz={11} c={job.ticket?.approvedAt ? 'teal.7' : 'dimmed'}>
+                              Support Approval {job.ticket?.approvedAt ? '✓' : 'Pending'}
+                            </Text>
+                          </Group>
+                        </Group>
+
+                        {canWork ? (
                           <Button
-                            component={Link}
-                            href={`/dashboard/support/${job.ticket.id}`}
-                            size="xs"
                             color="grape"
-                            rightSection={<ArrowRight size={13} />}
+                            leftSection={<CheckCircle2 size={15} />}
+                            disabled={!canComplete || job.status === 'COMPLETED'}
+                            loading={completeMutation.isPending}
+                            onClick={() => completeMutation.mutate()}
                           >
-                            View Support Ticket & Bill (#{job.ticket.ticketNumber})
+                            Complete Repair & Generate Service Bill
                           </Button>
+                        ) : (
+                          <Text fz="xs" c="dimmed">
+                            Technician or director sign-off required.
+                          </Text>
                         )}
                       </Group>
-                    </Alert>
-                  ) : (
-                    <Group justify="space-between" wrap="wrap">
-                      <Group gap="md" wrap="wrap">
-                        <Group gap={6}>
-                          <CheckCircle2 size={14} color={photosReady ? '#0f766e' : '#94a3b8'} />
-                          <Text fz={11} c={photosReady ? 'teal.7' : 'dimmed'}>
-                            Proof Photos ({photos.length})
-                          </Text>
-                        </Group>
-                        <Group gap={6}>
-                          <Signature size={14} color={signatureReady ? '#0f766e' : '#94a3b8'} />
-                          <Text fz={11} c={signatureReady ? 'teal.7' : 'dimmed'}>
-                            Customer Signature {signatureReady ? '✓' : 'Pending'}
-                          </Text>
-                        </Group>
-                        <Group gap={6}>
-                          <ShieldCheck size={14} color={job.ticket?.approvedAt ? '#0f766e' : '#94a3b8'} />
-                          <Text fz={11} c={job.ticket?.approvedAt ? 'teal.7' : 'dimmed'}>
-                            Support Approval {job.ticket?.approvedAt ? '✓' : 'Pending'}
-                          </Text>
-                        </Group>
-                      </Group>
-
-                      {canWork ? (
-                        <Button
-                          color="grape"
-                          leftSection={<CheckCircle2 size={15} />}
-                          disabled={!canComplete || job.status === 'COMPLETED'}
-                          loading={completeMutation.isPending}
-                          onClick={() => completeMutation.mutate()}
-                        >
-                          Complete Repair & Generate Support Bill
-                        </Button>
-                      ) : (
-                        <Text fz="xs" c="dimmed">
-                          Technician or director sign-off required.
-                        </Text>
-                      )}
-                    </Group>
+                    </>
                   )}
                 </Stack>
               </Panel>
@@ -1889,6 +2035,19 @@ function JobDetail() {
       <Modal opened={Boolean(previewPhoto)} onClose={() => setPreviewPhoto(null)} title="Job photo" size="xl">
         {previewPhoto && <Image src={assetUrl(previewPhoto)} alt="Job photo" radius="md" />}
       </Modal>
+
+      {job && job.ticket?.invoices?.[0] && (
+        <ServiceInvoiceModal
+          opened={billModalOpen}
+          onClose={() => setBillModalOpen(false)}
+          invoice={job.ticket.invoices[0]}
+          ticket={job.ticket}
+          job={job}
+          customer={job.customer}
+          signature={job.signature}
+          photos={job.photos}
+        />
+      )}
     </>
   );
 }

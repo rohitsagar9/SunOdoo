@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError, notFound } from '../lib/errors.js';
-import { nextJobNumber, nextTicketNumber } from '../lib/sequence.js';
+import { nextInvoiceNumber, nextJobNumber, nextTicketNumber } from '../lib/sequence.js';
 import { warrantyStatus } from './warranty.js';
 import { audit } from '../lib/audit.js';
 import type { TicketPriority } from '@prisma/client';
@@ -137,15 +137,15 @@ export async function updateTicket(
       include: { customer: true, product: true, updates: { orderBy: { createdAt: 'asc' } } },
     });
 
-    if (nextStatus === 'RESOLVED' && billable) {
+    if (nextStatus === 'RESOLVED' || nextStatus === 'CLOSED') {
       const existing = await tx.invoice.findFirst({ where: { ticketId: id } });
       if (!existing) {
-        const invoiceNumber = `SP-INV-${new Date().getFullYear()}-${String(
-          (await tx.invoice.count()) + 1,
-        ).padStart(4, '0')}`;
-        const taxRate = 18;
-        const subtotal = labor + parts;
+        const invoiceNumber = await nextInvoiceNumber();
+        const subtotal = billable ? labor + parts : 0;
+        const taxRate = billable && subtotal > 0 ? 18 : 0;
         const taxAmount = Math.round(subtotal * (taxRate / 100));
+        const total = subtotal + taxAmount;
+        const now = new Date();
         await tx.invoice.create({
           data: {
             invoiceNumber,
@@ -155,9 +155,10 @@ export async function updateTicket(
             subtotal,
             taxRate,
             taxAmount,
-            total: subtotal + taxAmount,
-            status: 'SENT',
-            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            total,
+            status: billable && total > 0 ? 'SENT' : 'PAID',
+            paidAt: billable && total > 0 ? undefined : now,
+            dueDate: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
             createdById: userId,
           },
         });
@@ -179,8 +180,8 @@ export async function updateTicket(
           await tx.job.create({
             data: {
               jobNumber: await nextJobNumber(),
+              ticketId: current.id,
               customerId: current.customerId,
-              orderId: current.orderId ?? undefined,
               type: 'REPAIR',
               technicianId: input.assignedToId,
               scheduledDate: new Date(),

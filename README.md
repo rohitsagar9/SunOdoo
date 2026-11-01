@@ -117,7 +117,7 @@ erDiagram
         string name
         string email UK
         string passwordHash
-        enum role "DIRECTOR | SALES | TECHNICIAN | WAREHOUSE | SUPPORT"
+        string role "DIRECTOR, SALES, TECHNICIAN, WAREHOUSE, SUPPORT"
         string phone
         boolean active
     }
@@ -137,22 +137,22 @@ erDiagram
         string id PK
         string reference UK
         string customerId FK
-        enum source "WEB_FORM | WHATSAPP | PHONE | WALK_IN"
+        string source "WEB_FORM, WHATSAPP, PHONE, WALK_IN"
         float requestedKw
-        enum systemType "ON_GRID | OFF_GRID"
-        enum status "NEW > VERIFIED > SURVEY_SCHEDULED > QUOTED > WON | LOST"
+        string systemType "ON_GRID, OFF_GRID"
+        string status "NEW, VERIFIED, SURVEY_SCHEDULED, QUOTED, WON, LOST"
         string assignedToId FK
     }
 
     SURVEY {
         string id PK
-        string leadId FK_UK
+        string leadId UK
         string technicianId FK
         string roofDirection
         int tiltDegrees
         int shadowFreeAreaSqft
         boolean approved
-        string technicianAssessment "FEASIBLE | NOT_FEASIBLE"
+        string technicianAssessment "FEASIBLE, NOT_FEASIBLE"
     }
 
     QUOTE {
@@ -165,7 +165,7 @@ erDiagram
         float discountPercent
         int taxAmount
         int total
-        enum status "DRAFT | SENT | ACCEPTED | REJECTED | EXPIRED"
+        string status "DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED"
         string publicToken UK
     }
 
@@ -173,7 +173,7 @@ erDiagram
         string id PK
         string quoteId FK
         string productId FK
-        enum category "PANEL | INVERTER | BATTERY | CABLE | BOS | ..."
+        string category "PANEL, INVERTER, BATTERY, CABLE, BOS"
         int quantity
         int unitPrice
         int total
@@ -183,7 +183,7 @@ erDiagram
         string id PK
         string sku UK
         string name
-        enum category "PANEL | INVERTER | BATTERY | STRUCTURE | CABLE | BOS"
+        string category "PANEL, INVERTER, BATTERY, STRUCTURE, CABLE, BOS"
         int unitPrice
         int costPrice
         int warrantyMonths
@@ -193,9 +193,9 @@ erDiagram
     ORDER {
         string id PK
         string orderNumber UK
-        string quoteId FK_UK
+        string quoteId UK
         string customerId FK
-        enum status "PENDING_PAYMENT > ADVANCE_PAID > DISPATCHED > INSTALLED > COMPLETED"
+        string status "PENDING_PAYMENT, ADVANCE_PAID, DISPATCHED, INSTALLED, COMPLETED"
         int total
         int advancePaid
         int balanceDue
@@ -216,7 +216,7 @@ erDiagram
         string id PK
         string productId FK
         string serialNumber UK
-        enum status "IN_STOCK | RESERVED | DISPATCHED | INSTALLED | FAULTY"
+        string status "IN_STOCK, RESERVED, DISPATCHED, INSTALLED, FAULTY"
         string orderId FK
         datetime warrantyStart
         datetime warrantyEnd
@@ -227,20 +227,20 @@ erDiagram
         string orderId FK
         string ticketId FK
         int amount
-        enum method "UPI | CASH | BANK_TRANSFER | CARD | CHEQUE"
-        enum type "ADVANCE | BALANCE | FULL"
-        enum status "PENDING | APPROVED | REJECTED"
+        string method "UPI, CASH, BANK_TRANSFER, CARD, CHEQUE"
+        string type "ADVANCE, BALANCE, FULL"
+        string status "PENDING, APPROVED, REJECTED"
         string screenshotUrl
     }
 
     JOB {
         string id PK
         string jobNumber UK
-        string orderId FK_UK
+        string orderId UK
         string ticketId FK
         string customerId FK
-        enum type "SURVEY | INSTALLATION | REPAIR"
-        enum status "SCHEDULED | IN_PROGRESS | COMPLETED | CANCELLED"
+        string type "SURVEY, INSTALLATION, REPAIR"
+        string status "SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED"
         string technicianId FK
         datetime scheduledDate
         datetime clockInAt
@@ -257,7 +257,7 @@ erDiagram
 
     JOB_SIGNATURE {
         string id PK
-        string jobId FK_UK
+        string jobId UK
         string signerName
         string dataUrl
         datetime signedAt
@@ -279,9 +279,9 @@ erDiagram
         string orderId FK
         string serialNumber
         string issue
-        enum priority "LOW | MEDIUM | HIGH | URGENT"
-        enum status "OPEN | IN_PROGRESS | RESOLVED | CLOSED"
-        enum warrantyStatus "IN_WARRANTY | OUT_OF_WARRANTY | UNKNOWN"
+        string priority "LOW, MEDIUM, HIGH, URGENT"
+        string status "OPEN, IN_PROGRESS, RESOLVED, CLOSED"
+        string warrantyStatus "IN_WARRANTY, OUT_OF_WARRANTY, UNKNOWN"
         boolean billable
         int laborCharge
         int partsCharge
@@ -301,14 +301,14 @@ erDiagram
         string id PK
         string invoiceNumber UK
         string customerId FK
-        string orderId FK_UK
-        string ticketId FK_UK
-        enum type "SALES | REPAIR"
+        string orderId UK
+        string ticketId UK
+        string type "SALES, REPAIR"
         int subtotal
         float taxRate
         int taxAmount
         int total
-        enum status "DRAFT | SENT | PAID | OVERDUE"
+        string status "DRAFT, SENT, PAID, OVERDUE"
     }
 
     EXPENSE {
@@ -322,9 +322,9 @@ erDiagram
     SUBSIDY_RECORD {
         string id PK
         string customerId FK
-        string orderId FK_UK
+        string orderId UK
         string scheme
-        enum status "NOT_STARTED | SUBMITTED | APPROVED | DISBURSED"
+        string status "NOT_STARTED, SUBMITTED, APPROVED, DISBURSED"
         int amount
         string applicationNumber
     }
